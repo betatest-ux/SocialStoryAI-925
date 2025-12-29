@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { LineChart, PieChart } from "react-native-chart-kit";
 import * as Haptics from "expo-haptics";
 
-type Tab = "analytics" | "users" | "stories" | "settings" | "logs" | "api-keys" | "contacts" | "mail";
+type Tab = "analytics" | "users" | "stories" | "settings" | "logs" | "api-keys" | "contacts" | "mail" | "content";
 type DateFilter = "7d" | "30d" | "90d" | "all";
 type UserFilter = "all" | "premium" | "free" | "admin";
 
@@ -1381,6 +1381,15 @@ export default function AdminPage() {
         >
           <Text style={[styles.secondaryTabText, activeTab === "mail" && styles.secondaryTabTextActive]}>
             Mail Config
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.secondaryTab, activeTab === "content" && styles.secondaryTabActive]}
+          onPress={() => router.push("/content-editor" as any)}
+        >
+          <Text style={[styles.secondaryTabText, activeTab === "content" && styles.secondaryTabTextActive]}>
+            Content Editor
           </Text>
         </TouchableOpacity>
       </ScrollView>
