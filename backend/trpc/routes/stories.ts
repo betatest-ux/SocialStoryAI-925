@@ -1,0 +1,123 @@
+import * as z from "zod";
+import { createTRPCRouter, protectedProcedure } from "@/backend/trpc/create-context";
+import { 
+  createStory, 
+  getStory, 
+  getUserStories, 
+  updateStory,
+  deleteStory
+} from "@/backend/db/stories";
+import { getUserData, updateUser } from "@/backend/db/users";
+
+export const storiesRouter = createTRPCRouter({
+  create: protectedProcedure
+    .input(z.object({ 
+      childName: z.string(),
+      situation: z.string(),
+      complexity: z.enum(["very-simple", "simple", "moderate"]),
+      tone: z.enum(["friendly", "calm", "encouraging", "straightforward"]),
+      imageStyle: z.enum(["cartoon", "realistic", "minimal", "illustrated"]),
+      content: z.string(),
+      images: z.array(z.string()),
+    }))
+    .mutation(({ ctx, input }) => {
+      const user = getUserData(ctx.userId);
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      if (!user.isPremium && user.storiesGenerated >= 3) {
+        throw new Error("Free limit reached. Please upgrade to premium.");
+      }
+
+      const story = createStory({
+        userId: ctx.userId,
+        childName: input.childName,
+        situation: input.situation,
+        complexity: input.complexity,
+        tone: input.tone,
+        imageStyle: input.imageStyle,
+        content: input.content,
+        images: input.images,
+      });
+
+      updateUser(ctx.userId, { 
+        storiesGenerated: user.storiesGenerated + 1 
+      });
+
+      return story;
+    }),
+
+  get: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(({ ctx, input }) => {
+      const story = getStory(input.id);
+      if (!story || story.userId !== ctx.userId) {
+        throw new Error("Story not found");
+      }
+      return story;
+    }),
+
+  list: protectedProcedure.query(({ ctx }) => {
+    return getUserStories(ctx.userId);
+  }),
+
+  update: protectedProcedure
+    .input(z.object({ 
+      id: z.string(),
+      content: z.string().optional(),
+      images: z.array(z.string()).optional(),
+      videoUrl: z.string().optional(),
+    }))
+    .mutation(({ ctx, input }) => {
+      const story = getStory(input.id);
+      if (!story || story.userId !== ctx.userId) {
+        throw new Error("Story not found");
+      }
+
+      updateStory(input.id, {
+        content: input.content,
+        images: input.images,
+        videoUrl: input.videoUrl,
+      });
+
+      return { success: true };
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ ctx, input }) => {
+      const story = getStory(input.id);
+      if (!story || story.userId !== ctx.userId) {
+        throw new Error("Story not found");
+      }
+
+      deleteStory(input.id);
+      return { success: true };
+    }),
+
+  generateVideo: protectedProcedure
+    .input(z.object({ storyId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const user = getUserData(ctx.userId);
+      if (!user?.isPremium) {
+        throw new Error("Video generation is only available for premium users");
+      }
+      
+      const story = getStory(input.storyId);
+      if (!story) {
+        throw new Error("Story not found");
+      }
+      
+      if (story.userId !== ctx.userId) {
+        throw new Error("Unauthorized");
+      }
+
+      const videoUrl = `https://storage.socialstoryai.com/videos/${input.storyId}.mp4`;
+      updateStory(input.storyId, { videoUrl });
+      
+      console.log(`Video generation initiated for story ${input.storyId}`);
+      
+      return { videoUrl };
+    }),
+});
