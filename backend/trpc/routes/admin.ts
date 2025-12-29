@@ -1,65 +1,9 @@
 import { createTRPCRouter, protectedProcedure } from "@/backend/trpc/create-context";
 import { getUserData, getAllUsers, updateUser, deleteUser } from "@/backend/db/users";
 import { getAllStories, deleteStory } from "@/backend/db/stories";
+import { getAdminSettings, updateAdminSettings, getApiKeys, updateApiKeys, addActivityLog, getActivityLogs } from "@/backend/db/admin";
 import { z } from "zod";
 import bcrypt from 'bcryptjs';
-
-type AdminSettings = {
-  freeStoryLimit: number;
-  enableRegistration: boolean;
-  maintenanceMode: boolean;
-  premiumPrice: number;
-};
-
-let adminSettings: AdminSettings = {
-  freeStoryLimit: 3,
-  enableRegistration: true,
-  maintenanceMode: false,
-  premiumPrice: 9.99,
-};
-
-type ActivityLog = {
-  id: string;
-  timestamp: number;
-  action: string;
-  userId: string;
-  details: string;
-};
-
-const activityLogs: ActivityLog[] = [];
-
-type ApiKeys = {
-  openaiKey: string;
-  geminiKey: string;
-  stripeSecretKey: string;
-  stripePublishableKey: string;
-  googleOAuthWebClientId: string;
-  googleOAuthIosClientId: string;
-  googleOAuthAndroidClientId: string;
-};
-
-let apiKeys: ApiKeys = {
-  openaiKey: "",
-  geminiKey: "",
-  stripeSecretKey: "",
-  stripePublishableKey: "",
-  googleOAuthWebClientId: "",
-  googleOAuthIosClientId: "",
-  googleOAuthAndroidClientId: "",
-};
-
-function addActivityLog(action: string, userId: string, details: string) {
-  activityLogs.unshift({
-    id: Date.now().toString() + Math.random(),
-    timestamp: Date.now(),
-    action,
-    userId,
-    details,
-  });
-  if (activityLogs.length > 100) {
-    activityLogs.pop();
-  }
-}
 
 export const adminRouter = createTRPCRouter({
   analytics: protectedProcedure.query(({ ctx }) => {
@@ -281,7 +225,7 @@ export const adminRouter = createTRPCRouter({
       throw new Error("Unauthorized");
     }
 
-    return adminSettings;
+    return getAdminSettings();
   }),
 
   updateSettings: protectedProcedure
@@ -299,10 +243,10 @@ export const adminRouter = createTRPCRouter({
         throw new Error("Unauthorized");
       }
 
-      adminSettings = { ...adminSettings, ...input };
+      updateAdminSettings(input);
       addActivityLog("update_settings", ctx.userId, `Updated app settings`);
 
-      return adminSettings;
+      return getAdminSettings();
     }),
 
   getActivityLogs: protectedProcedure.query(({ ctx }) => {
@@ -312,7 +256,8 @@ export const adminRouter = createTRPCRouter({
     }
 
     const users = getAllUsers();
-    return activityLogs.map((log) => {
+    const logs = getActivityLogs();
+    return logs.map((log) => {
       const logUser = users.find((u) => u.id === log.userId);
       return {
         ...log,
@@ -328,7 +273,16 @@ export const adminRouter = createTRPCRouter({
       throw new Error("Unauthorized");
     }
 
-    return apiKeys;
+    const keys = getApiKeys();
+    return {
+      openaiKey: keys.openaiKey || '',
+      geminiKey: keys.geminiKey || '',
+      stripeSecretKey: keys.stripeSecretKey || '',
+      stripePublishableKey: keys.stripePublishableKey || '',
+      googleOAuthWebClientId: keys.googleOAuthWebClientId || '',
+      googleOAuthIosClientId: keys.googleOAuthIosClientId || '',
+      googleOAuthAndroidClientId: keys.googleOAuthAndroidClientId || '',
+    };
   }),
 
   updateApiKeys: protectedProcedure
@@ -349,9 +303,18 @@ export const adminRouter = createTRPCRouter({
         throw new Error("Unauthorized");
       }
 
-      apiKeys = { ...apiKeys, ...input };
+      updateApiKeys(input);
       addActivityLog("update_api_keys", ctx.userId, "Updated API keys configuration");
 
-      return apiKeys;
+      const keys = getApiKeys();
+      return {
+        openaiKey: keys.openaiKey || '',
+        geminiKey: keys.geminiKey || '',
+        stripeSecretKey: keys.stripeSecretKey || '',
+        stripePublishableKey: keys.stripePublishableKey || '',
+        googleOAuthWebClientId: keys.googleOAuthWebClientId || '',
+        googleOAuthIosClientId: keys.googleOAuthIosClientId || '',
+        googleOAuthAndroidClientId: keys.googleOAuthAndroidClientId || '',
+      };
     }),
 });

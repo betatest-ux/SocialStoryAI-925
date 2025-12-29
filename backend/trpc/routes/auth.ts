@@ -1,6 +1,8 @@
 import * as z from "zod";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "@/backend/trpc/create-context";
 import { getUserData, createUser, updateUser, verifyPassword, updatePassword } from "@/backend/db/users";
+import { checkRateLimit } from "@/backend/middleware/rate-limit";
+import { generateToken } from "@/backend/utils/jwt";
 
 export const authRouter = createTRPCRouter({
   login: publicProcedure
@@ -9,11 +11,22 @@ export const authRouter = createTRPCRouter({
       password: z.string().min(6)
     }))
     .mutation(({ input }) => {
+      if (!checkRateLimit(input.email, 'login')) {
+        throw new Error('Too many login attempts. Please try again later.');
+      }
+      
       const user = getUserData(input.email);
       if (!user || !verifyPassword(input.password, user.password)) {
         throw new Error("Invalid credentials");
       }
       updateUser(user.id, { lastLoginAt: new Date().toISOString() });
+      
+      const token = generateToken({
+        userId: user.id,
+        email: user.email,
+        isAdmin: user.isAdmin,
+      });
+      
       return {
         userId: user.id,
         email: user.email,
@@ -22,6 +35,7 @@ export const authRouter = createTRPCRouter({
         storiesGenerated: user.storiesGenerated,
         isAdmin: user.isAdmin,
         subscriptionEndDate: user.subscriptionEndDate,
+        token,
       };
     }),
 
@@ -32,6 +46,10 @@ export const authRouter = createTRPCRouter({
       name: z.string().min(2)
     }))
     .mutation(({ input }) => {
+      if (!checkRateLimit(input.email, 'register')) {
+        throw new Error('Too many registration attempts. Please try again later.');
+      }
+      
       const existingUser = getUserData(input.email);
       if (existingUser) {
         throw new Error("User already exists");
@@ -43,6 +61,12 @@ export const authRouter = createTRPCRouter({
         name: input.name,
       });
       
+      const token = generateToken({
+        userId: user.id,
+        email: user.email,
+        isAdmin: user.isAdmin,
+      });
+      
       return {
         userId: user.id,
         email: user.email,
@@ -51,6 +75,7 @@ export const authRouter = createTRPCRouter({
         storiesGenerated: user.storiesGenerated,
         isAdmin: user.isAdmin,
         subscriptionEndDate: user.subscriptionEndDate,
+        token,
       };
     }),
 

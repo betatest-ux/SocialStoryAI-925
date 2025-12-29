@@ -1,10 +1,19 @@
 import { initTRPC } from "@trpc/server";
 import { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 import superjson from "superjson";
+import { verifyToken } from "@/backend/utils/jwt";
 
 export const createContext = async (opts: FetchCreateContextFnOptions) => {
   const authHeader = opts.req.headers.get("authorization");
-  const userId = authHeader?.replace("Bearer ", "") || null;
+  let userId: string | null = null;
+  
+  if (authHeader) {
+    const token = authHeader.replace("Bearer ", "");
+    const payload = verifyToken(token);
+    if (payload) {
+      userId = payload.userId;
+    }
+  }
   
   return {
     req: opts.req,
