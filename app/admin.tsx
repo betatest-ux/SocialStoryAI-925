@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { LineChart, PieChart } from "react-native-chart-kit";
 import * as Haptics from "expo-haptics";
 
-type Tab = "analytics" | "users" | "stories" | "settings" | "logs" | "api-keys";
+type Tab = "analytics" | "users" | "stories" | "settings" | "logs" | "api-keys" | "contacts" | "mail";
 type DateFilter = "7d" | "30d" | "90d" | "all";
 type UserFilter = "all" | "premium" | "free" | "admin";
 
@@ -28,6 +28,8 @@ export default function AdminPage() {
   const storiesQuery = trpc.admin.stories.useQuery();
   const settingsQuery = trpc.admin.getSettings.useQuery();
   const apiKeysQuery = trpc.admin.getApiKeys.useQuery();
+  const contactsQuery = trpc.contact.getAll.useQuery(undefined, { enabled: user?.isAdmin });
+  const mailConfigQuery = trpc.contact.getMailConfig.useQuery(undefined, { enabled: user?.isAdmin });
   const logsQuery = trpc.admin.getActivityLogs.useQuery();
   
   const togglePremiumMutation = trpc.admin.togglePremium.useMutation();
@@ -36,6 +38,23 @@ export default function AdminPage() {
   const deleteStoryMutation = trpc.admin.deleteStory.useMutation();
   const updateSettingsMutation = trpc.admin.updateSettings.useMutation();
   const updateApiKeysMutation = trpc.admin.updateApiKeys.useMutation();
+  const updateContactStatusMutation = trpc.contact.updateStatus.useMutation();
+  const deleteContactMutation = trpc.contact.delete.useMutation();
+  const replyContactMutation = trpc.contact.reply.useMutation();
+  const updateMailConfigMutation = trpc.contact.updateMailConfig.useMutation();
+  const testMailMutation = trpc.contact.testMailConnection.useMutation();
+  
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [mailConfig, setMailConfig] = useState({
+    host: "",
+    port: 587,
+    secure: false,
+    user: "",
+    password: "",
+    fromEmail: "",
+    fromName: "SocialStoryAI",
+  });
   const resetPasswordMutation = trpc.admin.resetPassword.useMutation();
   const extendSubscriptionMutation = trpc.admin.extendSubscription.useMutation();
 
@@ -917,6 +936,366 @@ export default function AdminPage() {
     );
   };
 
+  const renderContacts = () => {
+    const contacts = contactsQuery.data;
+    if (!contacts) return null;
+
+    const pendingContacts = contacts.filter((c: any) => c.status === 'pending');
+    const inProgressContacts = contacts.filter((c: any) => c.status === 'in-progress');
+    const resolvedContacts = contacts.filter((c: any) => c.status === 'resolved');
+
+    const handleUpdateStatus = async (id: string, status: 'pending' | 'in-progress' | 'resolved') => {
+      try {
+        await updateContactStatusMutation.mutateAsync({ id, status });
+        contactsQuery.refetch();
+        Alert.alert("Success", "Status updated");
+      } catch (error: any) {
+        Alert.alert("Error", error.message || "Failed to update status");
+      }
+    };
+
+    const handleDeleteContact = async (id: string) => {
+      Alert.alert(
+        "Confirm Delete",
+        "Are you sure you want to delete this contact request?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                await deleteContactMutation.mutateAsync({ id });
+                contactsQuery.refetch();
+                Alert.alert("Success", "Contact request deleted");
+              } catch (error: any) {
+                Alert.alert("Error", error.message || "Failed to delete");
+              }
+            },
+          },
+        ]
+      );
+    };
+
+    const handleReply = async (id: string) => {
+      if (!replyText.trim()) {
+        Alert.alert("Error", "Please enter a reply message");
+        return;
+      }
+
+      try {
+        await replyContactMutation.mutateAsync({ id, reply: replyText.trim() });
+        contactsQuery.refetch();
+        setSelectedContactId(null);
+        setReplyText("");
+        Alert.alert("Success", "Reply sent successfully");
+      } catch (error: any) {
+        Alert.alert("Error", error.message || "Failed to send reply");
+      }
+    };
+
+    const renderContactCard = (contact: any) => (
+      <View key={contact.id} style={styles.contactCard}>
+        <View style={styles.contactCardHeader}>
+          <View style={styles.flex1}>
+            <Text style={styles.contactCardName}>{contact.name}</Text>
+            <Text style={styles.contactCardEmail}>{contact.email}</Text>
+          </View>
+          <View style={[
+            styles.contactStatusBadge,
+            contact.status === 'resolved' && styles.contactStatusResolved,
+            contact.status === 'in-progress' && styles.contactStatusInProgress,
+          ]}>
+            <Text style={styles.contactStatusText}>{contact.status}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.contactCardSubject}>{contact.subject}</Text>
+        <Text style={styles.contactCardMessage} numberOfLines={3}>{contact.message}</Text>
+        <Text style={styles.contactCardDate}>
+          {new Date(contact.createdAt).toLocaleString()}
+        </Text>
+
+        {contact.adminReply && (
+          <View style={styles.replySection}>
+            <Text style={styles.replySectionTitle}>Admin Reply:</Text>
+            <Text style={styles.replyText}>{contact.adminReply}</Text>
+            <Text style={styles.replyDate}>
+              Replied: {new Date(contact.repliedAt).toLocaleString()}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.contactActions}>
+          {['pending', 'in-progress', 'resolved'].map((status) => (
+            <TouchableOpacity
+              key={status}
+              style={[
+                styles.statusButton,
+                contact.status === status && styles.statusButtonActive,
+              ]}
+              onPress={() => handleUpdateStatus(contact.id, status as any)}
+            >
+              <Text style={[
+                styles.statusButtonText,
+                contact.status === status && styles.statusButtonTextActive,
+              ]}>
+                {status}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {selectedContactId !== contact.id && !contact.adminReply && (
+          <TouchableOpacity
+            style={styles.replyButton}
+            onPress={() => setSelectedContactId(contact.id)}
+          >
+            <Text style={styles.replyButtonText}>Reply via Email</Text>
+          </TouchableOpacity>
+        )}
+
+        {selectedContactId === contact.id && (
+          <View style={styles.replyForm}>
+            <TextInput
+              style={styles.replyInput}
+              value={replyText}
+              onChangeText={setReplyText}
+              placeholder="Type your reply..."
+              placeholderTextColor="#A0AEC0"
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+            <View style={styles.replyFormActions}>
+              <TouchableOpacity
+                style={styles.sendReplyButton}
+                onPress={() => handleReply(contact.id)}
+              >
+                <Text style={styles.sendReplyButtonText}>Send Email Reply</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelReplyButton}
+                onPress={() => {
+                  setSelectedContactId(null);
+                  setReplyText("");
+                }}
+              >
+                <Text style={styles.cancelReplyButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.deleteContactButton}
+          onPress={() => handleDeleteContact(contact.id)}
+        >
+          <Trash2 size={16} color="#E74C3C" />
+          <Text style={styles.deleteContactButtonText}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+    );
+
+    return (
+      <View>
+        <Text style={styles.sectionTitle}>Contact Requests</Text>
+        <Text style={styles.sectionSubtitle}>{contacts.length} total requests</Text>
+
+        {pendingContacts.length > 0 && (
+          <View style={styles.contactSection}>
+            <Text style={styles.contactSectionTitle}>Pending ({pendingContacts.length})</Text>
+            {pendingContacts.map(renderContactCard)}
+          </View>
+        )}
+
+        {inProgressContacts.length > 0 && (
+          <View style={styles.contactSection}>
+            <Text style={styles.contactSectionTitle}>In Progress ({inProgressContacts.length})</Text>
+            {inProgressContacts.map(renderContactCard)}
+          </View>
+        )}
+
+        {resolvedContacts.length > 0 && (
+          <View style={styles.contactSection}>
+            <Text style={styles.contactSectionTitle}>Resolved ({resolvedContacts.length})</Text>
+            {resolvedContacts.map(renderContactCard)}
+          </View>
+        )}
+
+        {contacts.length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No contact requests yet</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderMail = () => {
+    const config = mailConfigQuery.data;
+    if (!config) return null;
+
+    const handleUpdateMailConfig = async () => {
+      try {
+        await updateMailConfigMutation.mutateAsync(mailConfig);
+        mailConfigQuery.refetch();
+        Alert.alert("Success", "Mail configuration updated");
+      } catch (error: any) {
+        Alert.alert("Error", error.message || "Failed to update mail config");
+      }
+    };
+
+    const handleTestConnection = async () => {
+      try {
+        const result = await testMailMutation.mutateAsync();
+        if (result.success) {
+          Alert.alert("Success", "Mail server connection successful!");
+        } else {
+          Alert.alert("Error", "Failed to connect to mail server. Check your settings.");
+        }
+      } catch (error: any) {
+        Alert.alert("Error", error.message || "Failed to test connection");
+      }
+    };
+
+    return (
+      <View>
+        <Text style={styles.sectionTitle}>Mail Server Configuration</Text>
+        <Text style={styles.sectionSubtitle}>Configure SMTP settings for email notifications</Text>
+
+        <View style={styles.settingsCard}>
+          <View style={styles.mailFieldSection}>
+            <Text style={styles.mailFieldLabel}>SMTP Host</Text>
+            <TextInput
+              style={styles.mailFieldInput}
+              value={mailConfig.host}
+              onChangeText={(value) => setMailConfig({ ...mailConfig, host: value })}
+              placeholder="smtp.gmail.com"
+              placeholderTextColor="#A0AEC0"
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.mailFieldSection}>
+            <Text style={styles.mailFieldLabel}>SMTP Port</Text>
+            <TextInput
+              style={styles.mailFieldInput}
+              value={mailConfig.port.toString()}
+              onChangeText={(value) => setMailConfig({ ...mailConfig, port: parseInt(value) || 587 })}
+              placeholder="587"
+              placeholderTextColor="#A0AEC0"
+              keyboardType="number-pad"
+            />
+          </View>
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Use SSL/TLS</Text>
+              <Text style={styles.settingDescription}>Enable secure connection</Text>
+            </View>
+            <Switch
+              value={mailConfig.secure}
+              onValueChange={(value) => setMailConfig({ ...mailConfig, secure: value })}
+              trackColor={{ false: "#E1E8ED", true: "#4A90E2" }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          <View style={styles.mailFieldSection}>
+            <Text style={styles.mailFieldLabel}>SMTP Username</Text>
+            <TextInput
+              style={styles.mailFieldInput}
+              value={mailConfig.user}
+              onChangeText={(value) => setMailConfig({ ...mailConfig, user: value })}
+              placeholder="your-email@gmail.com"
+              placeholderTextColor="#A0AEC0"
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.mailFieldSection}>
+            <Text style={styles.mailFieldLabel}>SMTP Password</Text>
+            <TextInput
+              style={styles.mailFieldInput}
+              value={mailConfig.password}
+              onChangeText={(value) => setMailConfig({ ...mailConfig, password: value })}
+              placeholder="App password or account password"
+              placeholderTextColor="#A0AEC0"
+              secureTextEntry
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.mailFieldSection}>
+            <Text style={styles.mailFieldLabel}>From Email</Text>
+            <TextInput
+              style={styles.mailFieldInput}
+              value={mailConfig.fromEmail}
+              onChangeText={(value) => setMailConfig({ ...mailConfig, fromEmail: value })}
+              placeholder="noreply@socialstoryai.com"
+              placeholderTextColor="#A0AEC0"
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
+
+          <View style={styles.mailFieldSection}>
+            <Text style={styles.mailFieldLabel}>From Name</Text>
+            <TextInput
+              style={styles.mailFieldInput}
+              value={mailConfig.fromName}
+              onChangeText={(value) => setMailConfig({ ...mailConfig, fromName: value })}
+              placeholder="SocialStoryAI"
+              placeholderTextColor="#A0AEC0"
+            />
+          </View>
+        </View>
+
+        <View style={styles.mailActions}>
+          <TouchableOpacity
+            style={styles.saveMailButton}
+            onPress={handleUpdateMailConfig}
+          >
+            <Text style={styles.saveMailButtonText}>Save Configuration</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.testMailButton}
+            onPress={handleTestConnection}
+            disabled={testMailMutation.isPending}
+          >
+            <Text style={styles.testMailButtonText}>
+              {testMailMutation.isPending ? "Testing..." : "Test Connection"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.infoBox}>
+          <Text style={styles.infoBoxTitle}>📧 Email Setup Guide</Text>
+          <Text style={styles.infoBoxText}>
+            For Gmail: Use an App Password (not your account password)
+          </Text>
+          <Text style={styles.infoBoxText}>
+            1. Enable 2-factor authentication on your Google account
+          </Text>
+          <Text style={styles.infoBoxText}>
+            2. Go to: myaccount.google.com/apppasswords
+          </Text>
+          <Text style={styles.infoBoxText}>
+            3. Generate an App Password for &quot;Mail&quot;
+          </Text>
+          <Text style={styles.infoBoxText}>
+            4. Use that 16-character password here
+          </Text>
+          <Text style={styles.infoBoxText}>
+            Host: smtp.gmail.com, Port: 587, Secure: Off
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -981,10 +1360,30 @@ export default function AdminPage() {
         >
           <Key size={20} color={activeTab === "api-keys" ? "#4A90E2" : "#95A5A6"} />
           <Text style={[styles.tabText, activeTab === "api-keys" && styles.tabTextActive]}>
-            API Keys
+            Keys
           </Text>
         </TouchableOpacity>
       </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.secondaryTabBar}>
+        <TouchableOpacity
+          style={[styles.secondaryTab, activeTab === "contacts" && styles.secondaryTabActive]}
+          onPress={() => setActiveTab("contacts")}
+        >
+          <Text style={[styles.secondaryTabText, activeTab === "contacts" && styles.secondaryTabTextActive]}>
+            Contact Requests
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.secondaryTab, activeTab === "mail" && styles.secondaryTabActive]}
+          onPress={() => setActiveTab("mail")}
+        >
+          <Text style={[styles.secondaryTabText, activeTab === "mail" && styles.secondaryTabTextActive]}>
+            Mail Config
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
         {activeTab === "analytics" && renderAnalytics()}
@@ -993,6 +1392,8 @@ export default function AdminPage() {
         {activeTab === "settings" && renderSettings()}
         {activeTab === "logs" && renderLogs()}
         {activeTab === "api-keys" && renderApiKeys()}
+        {activeTab === "contacts" && renderContacts()}
+        {activeTab === "mail" && renderMail()}
       </ScrollView>
     </View>
   );
@@ -1645,5 +2046,278 @@ const styles = StyleSheet.create({
     color: "#4A5568",
     lineHeight: 20,
     marginBottom: 6,
+  },
+  secondaryTabBar: {
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E1E8ED",
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  secondaryTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderRadius: 8,
+    backgroundColor: "#F7FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  secondaryTabActive: {
+    backgroundColor: "#E8F4FD",
+    borderColor: "#4A90E2",
+  },
+  secondaryTabText: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: "#718096",
+  },
+  secondaryTabTextActive: {
+    color: "#4A90E2",
+  },
+  contactSection: {
+    marginBottom: 24,
+  },
+  contactSectionTitle: {
+    fontSize: 18,
+    fontWeight: "600" as const,
+    color: "#1A202C",
+    marginBottom: 12,
+  },
+  contactCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E1E8ED",
+  },
+  contactCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  contactCardName: {
+    fontSize: 16,
+    fontWeight: "600" as const,
+    color: "#1A202C",
+    marginBottom: 4,
+  },
+  contactCardEmail: {
+    fontSize: 14,
+    color: "#718096",
+  },
+  contactStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: "#FFF9E6",
+  },
+  contactStatusResolved: {
+    backgroundColor: "#E8F8F5",
+  },
+  contactStatusInProgress: {
+    backgroundColor: "#E8F4FD",
+  },
+  contactStatusText: {
+    fontSize: 12,
+    fontWeight: "600" as const,
+    color: "#1A202C",
+    textTransform: "capitalize" as const,
+  },
+  contactCardSubject: {
+    fontSize: 16,
+    fontWeight: "600" as const,
+    color: "#2C3E50",
+    marginBottom: 8,
+  },
+  contactCardMessage: {
+    fontSize: 14,
+    color: "#7F8C8D",
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  contactCardDate: {
+    fontSize: 12,
+    color: "#BDC3C7",
+    marginBottom: 12,
+  },
+  replySection: {
+    backgroundColor: "#F7FAFC",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  replySectionTitle: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: "#4A5568",
+    marginBottom: 8,
+  },
+  replyText: {
+    fontSize: 14,
+    color: "#2C3E50",
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  replyDate: {
+    fontSize: 12,
+    color: "#A0AEC0",
+  },
+  contactActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  statusButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "#F7FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+  },
+  statusButtonActive: {
+    backgroundColor: "#4A90E2",
+    borderColor: "#4A90E2",
+  },
+  statusButtonText: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: "#718096",
+    textTransform: "capitalize" as const,
+  },
+  statusButtonTextActive: {
+    color: "#FFFFFF",
+  },
+  replyButton: {
+    backgroundColor: "#E8F4FD",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  replyButtonText: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: "#4A90E2",
+  },
+  replyForm: {
+    marginBottom: 12,
+  },
+  replyInput: {
+    backgroundColor: "#F7FAFC",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: "#1A202C",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    minHeight: 100,
+    marginBottom: 12,
+  },
+  replyFormActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  sendReplyButton: {
+    flex: 1,
+    backgroundColor: "#4A90E2",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  sendReplyButtonText: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: "#FFFFFF",
+  },
+  cancelReplyButton: {
+    flex: 1,
+    backgroundColor: "#F7FAFC",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  cancelReplyButtonText: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: "#718096",
+  },
+  deleteContactButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "#FFF5F5",
+    borderWidth: 1,
+    borderColor: "#FED7D7",
+  },
+  deleteContactButtonText: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: "#E74C3C",
+  },
+  mailFieldSection: {
+    marginBottom: 16,
+  },
+  mailFieldLabel: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: "#1A202C",
+    marginBottom: 8,
+  },
+  mailFieldInput: {
+    backgroundColor: "#F7FAFC",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: "#1A202C",
+    borderWidth: 1,
+    borderColor: "#E1E8ED",
+  },
+  mailActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 24,
+  },
+  saveMailButton: {
+    flex: 1,
+    backgroundColor: "#4A90E2",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  saveMailButtonText: {
+    fontSize: 16,
+    fontWeight: "600" as const,
+    color: "#FFFFFF",
+  },
+  testMailButton: {
+    flex: 1,
+    backgroundColor: "#F7FAFC",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  testMailButtonText: {
+    fontSize: 16,
+    fontWeight: "600" as const,
+    color: "#4A90E2",
   },
 });

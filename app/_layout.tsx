@@ -25,6 +25,10 @@ function RootLayoutNav() {
       <Stack.Screen name="admin" options={{ title: "Admin Dashboard" }} />
       <Stack.Screen name="install" options={{ title: "Installation Guide" }} />
       <Stack.Screen name="settings" options={{ title: "Settings" }} />
+      <Stack.Screen name="contact" options={{ title: "Contact Us" }} />
+      <Stack.Screen name="faq" options={{ title: "FAQ" }} />
+      <Stack.Screen name="terms" options={{ title: "Terms of Service" }} />
+      <Stack.Screen name="privacy" options={{ title: "Privacy Policy" }} />
     </Stack>
   );
 }
