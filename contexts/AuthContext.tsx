@@ -30,9 +30,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const loadUser = async () => {
     try {
       const token = await AsyncStorage.getItem("authToken");
+      console.log('Loading user with token:', token ? 'exists' : 'none');
       if (token) {
         setAuthToken(token);
         const userData = await meQuery.refetch();
+        console.log('User data fetched:', userData.data ? 'success' : 'failed');
         if (userData.data) {
           setUser(userData.data);
         }
@@ -46,17 +48,25 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: async (data) => {
-      await AsyncStorage.setItem("authToken", data.userId);
-      setAuthToken(data.userId);
+      const token = data.token || data.userId;
+      await AsyncStorage.setItem("authToken", token);
+      setAuthToken(token);
       setUser(data);
+    },
+    onError: (error) => {
+      console.error('Login error:', error);
     },
   });
 
   const registerMutation = trpc.auth.register.useMutation({
     onSuccess: async (data) => {
-      await AsyncStorage.setItem("authToken", data.userId);
-      setAuthToken(data.userId);
+      const token = data.token || data.userId;
+      await AsyncStorage.setItem("authToken", token);
+      setAuthToken(token);
       setUser(data);
+    },
+    onError: (error) => {
+      console.error('Register error:', error);
     },
   });
 

@@ -2,6 +2,8 @@ import { trpcServer } from "@hono/trpc-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
+import { mkdirSync, existsSync } from 'fs';
+import { join } from 'path';
 
 import { appRouter } from "./trpc/app-router";
 import { createContext } from "./trpc/create-context";
@@ -10,20 +12,27 @@ import { initializeDefaultAdmin } from "./db/users";
 import { initializeDefaultContent } from "./db/content";
 import { printEnvironmentStatus } from "./utils/env-validation";
 
-printEnvironmentStatus();
-
-try {
-  console.log('Initializing database...');
-  getDatabase();
-  console.log('Database initialized successfully');
-  
-  initializeDefaultAdmin();
-  initializeDefaultContent();
-  
-  console.log('✅ Backend initialization complete\n');
-} catch (err) {
-  console.error('❌ Failed to initialize backend:', err);
-  throw err;
+if (typeof window === 'undefined') {
+  try {
+    printEnvironmentStatus();
+    
+    const dbDir = join(process.cwd(), 'database');
+    if (!existsSync(dbDir)) {
+      console.log('Creating database directory...');
+      mkdirSync(dbDir, { recursive: true });
+    }
+    
+    console.log('Initializing database...');
+    getDatabase();
+    console.log('Database initialized successfully');
+    
+    initializeDefaultAdmin();
+    initializeDefaultContent();
+    
+    console.log('✅ Backend initialization complete\n');
+  } catch (err) {
+    console.error('❌ Failed to initialize backend:', err);
+  }
 }
 
 const app = new Hono();
@@ -62,6 +71,15 @@ app.use(
 
 app.get("/", (c) => {
   return c.json({ status: "ok", message: "SocialStoryAI API is running" });
+});
+
+app.get("/health", (c) => {
+  try {
+    getDatabase();
+    return c.json({ status: "healthy", database: "connected", timestamp: new Date().toISOString() });
+  } catch (error) {
+    return c.json({ status: "unhealthy", error: String(error) }, 500);
+  }
 });
 
 export default app;

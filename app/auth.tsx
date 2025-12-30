@@ -24,17 +24,21 @@ export default function AuthScreen() {
 
   const handleSubmit = async () => {
     try {
+      console.log('Starting authentication:', isLogin ? 'login' : 'register', email);
       if (isLogin) {
-        await login({ email, password });
+        const result = await login({ email, password });
+        console.log('Login successful:', result);
       } else {
         if (!name) {
           Alert.alert("Error", "Please enter your name");
           return;
         }
-        await register({ email, password, name });
+        const result = await register({ email, password, name });
+        console.log('Register successful:', result);
       }
       router.replace("/home");
     } catch (error: any) {
+      console.error('Auth error:', error);
       Alert.alert("Error", error.message || "Authentication failed");
     }
   };
