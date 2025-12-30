@@ -1,7 +1,11 @@
 import { useState, useEffect } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 import createContextHook from "@nkzw/create-context-hook";
-import { trpc, setAuthToken } from "@/lib/trpc";
+import { supabase } from "@/lib/supabase";
+import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri } from 'expo-auth-session';
+
+WebBrowser.maybeCompleteAuthSession();
 
 type User = {
   userId: string;
@@ -16,85 +20,266 @@ type User = {
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  const meQuery = trpc.auth.me.useQuery(undefined, {
-    enabled: false,
-    retry: false,
-  });
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [loginError, setLoginError] = useState<string | undefined>();
+  const [registerError, setRegisterError] = useState<string | undefined>();
 
   useEffect(() => {
-    loadUser();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('Loading user, session exists:', !!session);
+        if (session?.user) {
+          await loadUserProfile(session.user.id);
+        }
+      } catch (error) {
+        console.error("Failed to load user:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initAuth();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.id);
+      if (session?.user) {
+        await loadUserProfile(session.user.id);
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
-  const loadUser = async () => {
+
+
+  const loadUserProfile = async (userId: string) => {
     try {
-      const token = await AsyncStorage.getItem("authToken");
-      console.log('Loading user with token:', token ? 'exists' : 'none');
-      if (token) {
-        setAuthToken(token);
-        const userData = await meQuery.refetch();
-        console.log('User data fetched:', userData.data ? 'success' : 'failed');
-        if (userData.data) {
-          setUser(userData.data);
-        }
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error loading user profile:', error);
+        return;
+      }
+
+      if (data) {
+        setUser({
+          userId: data.id,
+          email: data.email,
+          name: data.name,
+          isPremium: data.is_premium,
+          storiesGenerated: data.stories_generated,
+          isAdmin: data.is_admin,
+          subscriptionEndDate: data.subscription_end_date || undefined,
+        });
       }
     } catch (error) {
-      console.error("Failed to load user:", error);
-    } finally {
-      setIsLoading(false);
+      console.error('Failed to load user profile:', error);
     }
   };
 
-  const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: async (data) => {
-      const token = data.token || data.userId;
-      await AsyncStorage.setItem("authToken", token);
-      setAuthToken(token);
-      setUser(data);
-    },
-    onError: (error) => {
-      console.error('Login error:', error);
-    },
-  });
+  const login = async ({ email, password }: { email: string; password: string }) => {
+    setIsLoggingIn(true);
+    setLoginError(undefined);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-  const registerMutation = trpc.auth.register.useMutation({
-    onSuccess: async (data) => {
-      const token = data.token || data.userId;
-      await AsyncStorage.setItem("authToken", token);
-      setAuthToken(token);
-      setUser(data);
-    },
-    onError: (error) => {
-      console.error('Register error:', error);
-    },
-  });
+      if (error) {
+        console.error('Login error:', error);
+        setLoginError(error.message);
+        throw new Error(error.message);
+      }
+
+      if (data.user) {
+        await supabase
+          .from('users')
+          .update({ last_login_at: new Date().toISOString() })
+          .eq('id', data.user.id);
+
+        await loadUserProfile(data.user.id);
+      }
+
+      return data;
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const register = async ({ email, password, name }: { email: string; password: string; name: string }) => {
+    setIsRegistering(true);
+    setRegisterError(undefined);
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+          },
+        },
+      });
+
+      if (authError) {
+        console.error('Register error:', authError);
+        setRegisterError(authError.message);
+        throw new Error(authError.message);
+      }
+
+      if (authData.user) {
+        const { error: profileError } = await supabase
+          .from('users')
+          .insert({
+            id: authData.user.id,
+            email: authData.user.email!,
+            name,
+            is_premium: false,
+            stories_generated: 0,
+            is_admin: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+
+        if (profileError) {
+          console.error('Error creating user profile:', profileError);
+          throw new Error(profileError.message);
+        }
+
+        await loadUserProfile(authData.user.id);
+      }
+
+      return authData;
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
+  const loginWithGoogle = async () => {
+    try {
+      const redirectUrl = makeRedirectUri({
+        path: '/auth/callback',
+      });
+
+      console.log('Google login redirect URL:', redirectUrl);
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: Platform.OS !== 'web',
+        },
+      });
+
+      if (error) {
+        console.error('Google login error:', error);
+        throw new Error(error.message);
+      }
+
+      if (Platform.OS !== 'web' && data.url) {
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectUrl
+        );
+
+        if (result.type === 'success') {
+          const { url } = result;
+          const params = new URLSearchParams(url.split('#')[1]);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+          }
+        }
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Google login failed:', error);
+      throw error;
+    }
+  };
 
   const logout = async () => {
-    await AsyncStorage.removeItem("authToken");
-    setAuthToken("");
+    await supabase.auth.signOut();
     setUser(null);
   };
 
-  const upgradeToPremium = trpc.auth.upgrade.useMutation({
-    onSuccess: () => {
-      loadUser();
-    },
-  });
+  const upgradeToPremium = async () => {
+    if (!user) throw new Error('User not found');
+    const subscriptionEndDate = new Date();
+    subscriptionEndDate.setMonth(subscriptionEndDate.getMonth() + 1);
 
-  const cancelSubscription = trpc.auth.cancelSubscription.useMutation({
-    onSuccess: () => {
-      loadUser();
-    },
-  });
+    const { error } = await supabase
+      .from('users')
+      .update({
+        is_premium: true,
+        subscription_end_date: subscriptionEndDate.toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.userId);
 
-  const updateProfile = trpc.auth.updateProfile.useMutation({
-    onSuccess: () => {
-      loadUser();
-    },
-  });
+    if (error) throw new Error(error.message);
+    await loadUserProfile(user.userId);
+  };
 
-  const changePassword = trpc.auth.changePassword.useMutation();
+  const cancelSubscription = async () => {
+    if (!user) throw new Error('User not found');
+
+    const { error } = await supabase
+      .from('users')
+      .update({
+        is_premium: false,
+        subscription_end_date: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.userId);
+
+    if (error) throw new Error(error.message);
+    await loadUserProfile(user.userId);
+  };
+
+  const updateProfile = async ({ name, email }: { name?: string; email?: string }) => {
+    if (!user) throw new Error('User not found');
+
+    const updates: any = { updated_at: new Date().toISOString() };
+    if (name) updates.name = name;
+    if (email) updates.email = email;
+
+    const { error } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('id', user.userId);
+
+    if (error) throw new Error(error.message);
+
+    if (email) {
+      const { error: authError } = await supabase.auth.updateUser({ email });
+      if (authError) throw new Error(authError.message);
+    }
+
+    await loadUserProfile(user.userId);
+  };
+
+  const changePassword = async ({ currentPassword, newPassword }: { currentPassword: string; newPassword: string }) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw new Error(error.message);
+    return { success: true };
+  };
 
   const canGenerateStory = () => {
     if (!user) return false;
@@ -110,18 +295,19 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     user,
     isLoading,
     isAuthenticated: !!user,
-    login: loginMutation.mutateAsync,
-    register: registerMutation.mutateAsync,
+    login,
+    register,
+    loginWithGoogle,
     logout,
-    upgradeToPremium: upgradeToPremium.mutateAsync,
-    cancelSubscription: cancelSubscription.mutateAsync,
-    updateProfile: updateProfile.mutateAsync,
-    changePassword: changePassword.mutateAsync,
+    upgradeToPremium,
+    cancelSubscription,
+    updateProfile,
+    changePassword,
     canGenerateStory,
     remainingFreeStories,
-    isLoggingIn: loginMutation.isPending,
-    isRegistering: registerMutation.isPending,
-    loginError: loginMutation.error?.message,
-    registerError: registerMutation.error?.message,
+    isLoggingIn,
+    isRegistering,
+    loginError,
+    registerError,
   };
 });

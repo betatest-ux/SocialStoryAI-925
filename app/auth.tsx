@@ -20,7 +20,7 @@ export default function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const router = useRouter();
-  const { login, register, isLoggingIn, isRegistering, loginError, registerError } = useAuth();
+  const { login, register, loginWithGoogle, isLoggingIn, isRegistering, loginError, registerError } = useAuth();
 
   const handleSubmit = async () => {
     try {
@@ -40,6 +40,17 @@ export default function AuthScreen() {
     } catch (error: any) {
       console.error('Auth error:', error);
       Alert.alert("Error", error.message || "Authentication failed");
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      console.log('Starting Google login');
+      await loginWithGoogle();
+      router.replace("/home");
+    } catch (error: any) {
+      console.error('Google login error:', error);
+      Alert.alert("Error", error.message || "Google login failed");
     }
   };
 
@@ -125,6 +136,25 @@ export default function AuthScreen() {
               {isLogin ? "Sign In" : "Create Account"}
             </Text>
           )}
+        </TouchableOpacity>
+
+        <View style={styles.dividerContainer}>
+          <View style={styles.divider} />
+          <Text style={styles.dividerText}>OR</Text>
+          <View style={styles.divider} />
+        </View>
+
+        <TouchableOpacity
+          style={styles.googleButton}
+          onPress={handleGoogleLogin}
+          disabled={isLoading}
+        >
+          <View style={styles.googleButtonContent}>
+            <View style={styles.googleIcon}>
+              <Text style={styles.googleIconText}>G</Text>
+            </View>
+            <Text style={styles.googleButtonText}>Continue with Google</Text>
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -230,5 +260,52 @@ const styles = StyleSheet.create({
   switchTextBold: {
     fontWeight: "600" as const,
     color: "#4A90E2",
+  },
+  dividerContainer: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    marginVertical: 24,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E1E8ED",
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+    color: "#95A5A6",
+    fontWeight: "500" as const,
+  },
+  googleButton: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center" as const,
+    borderWidth: 1,
+    borderColor: "#E1E8ED",
+  },
+  googleButtonContent: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+  },
+  googleIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#DB4437",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginRight: 12,
+  },
+  googleIconText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700" as const,
+  },
+  googleButtonText: {
+    color: "#2C3E50",
+    fontSize: 16,
+    fontWeight: "600" as const,
   },
 });
