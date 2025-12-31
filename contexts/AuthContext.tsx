@@ -67,7 +67,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         .single();
 
       if (error) {
-        console.error('Error loading user profile:', error);
+        console.error('Error loading user profile:', error.message || JSON.stringify(error));
         return;
       }
 
@@ -82,8 +82,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           subscriptionEndDate: data.subscription_end_date || undefined,
         });
       }
-    } catch (error) {
-      console.error('Failed to load user profile:', error);
+    } catch (error: any) {
+      console.error('Failed to load user profile:', error?.message || JSON.stringify(error));
     }
   };
 
