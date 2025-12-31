@@ -173,7 +173,7 @@ export default function StoryPage() {
         "Video generation is only available for premium members. Upgrade to premium to unlock this feature.",
         [
           { text: "Maybe Later", style: "cancel" },
-          { text: "Upgrade Now", onPress: () => router.push("/pricing") },
+          { text: "Upgrade Now", onPress: () => router.push("/pricing" as any) },
         ]
       );
       return;

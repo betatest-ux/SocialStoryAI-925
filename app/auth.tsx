@@ -47,7 +47,7 @@ export default function AuthScreen() {
         const result = await register({ email, password, name });
         console.log('Register successful:', result);
       }
-      router.replace("/home");
+      router.replace("/home" as any);
     } catch (error: any) {
       console.error('Auth error:', error);
       const errorMessage = error.message || "Authentication failed";
@@ -68,7 +68,7 @@ export default function AuthScreen() {
       console.log('Starting Google login');
       await loginWithGoogle();
       console.log('Google login completed, redirecting to home');
-      router.replace("/home");
+      router.replace("/home" as any);
     } catch (error: any) {
       console.error('Google login error:', error);
       const errorMessage = error.message || "Google login failed";

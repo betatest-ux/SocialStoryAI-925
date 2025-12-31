@@ -42,7 +42,7 @@ export default function CreateStoryPage() {
         "You've used all your free stories. Upgrade to premium for unlimited access.",
         [
           { text: "Cancel", style: "cancel" },
-          { text: "Upgrade", onPress: () => router.push("/pricing") },
+          { text: "Upgrade", onPress: () => router.push("/pricing" as any) },
         ]
       );
       return;
@@ -140,7 +140,7 @@ Format the story with proper paragraphs.`;
       console.log("Story saved:", story.id);
 
       Alert.alert("Success!", "Your social story has been created", [
-        { text: "View Story", onPress: () => router.push(`/story/${story.id}`) },
+        { text: "View Story", onPress: () => router.push(`/story/${story.id}` as any) },
       ]);
     } catch (error: any) {
       console.error("Error creating story:", error);

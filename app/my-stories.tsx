@@ -26,7 +26,7 @@ export default function MyStoriesPage() {
         <Text style={styles.emptyText}>Create your first social story to get started</Text>
         <TouchableOpacity
           style={styles.createButton}
-          onPress={() => router.push("/create-story")}
+          onPress={() => router.push("/create-story" as any)}
         >
           <Text style={styles.createButtonText}>Create Story</Text>
         </TouchableOpacity>

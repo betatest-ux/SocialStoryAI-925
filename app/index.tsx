@@ -45,7 +45,7 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      router.replace("/home");
+      router.replace("/home" as any);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, isLoading]);
@@ -93,7 +93,7 @@ export default function LandingPage() {
             style={styles.primaryButton}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push("/auth");
+              router.push("/auth" as any);
             }}
           >
             <Text style={styles.primaryButtonText}>Start Free Trial</Text>
@@ -104,7 +104,7 @@ export default function LandingPage() {
             style={styles.secondaryButton}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/about");
+              router.push("/about" as any);
             }}
           >
             <Text style={styles.secondaryButtonText}>Learn More</Text>
@@ -277,7 +277,7 @@ export default function LandingPage() {
             style={styles.finalCTAButton}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push("/auth");
+              router.push("/auth" as any);
             }}
           >
             <Text style={styles.finalCTAButtonText}>Start Your Free Trial</Text>

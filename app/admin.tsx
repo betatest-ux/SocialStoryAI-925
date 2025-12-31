@@ -60,7 +60,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (user && !user.isAdmin) {
-      router.replace("/home");
+      router.replace("/home" as any);
     }
   }, [user, router]);
 

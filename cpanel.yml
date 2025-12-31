@@ -1,0 +1,12 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/$USER/api/
+    - /bin/cp -R cpanel-nodejs $DEPLOYPATH
+    - cd $DEPLOYPATH/cpanel-nodejs
+    - npm install --production
+    - echo "Deployment completed successfully"
+    - echo "Please configure your Node.js app in cPanel using:"
+    - echo "Application Root: $DEPLOYPATH/cpanel-nodejs"
+    - echo "Application Startup File: server.js"
+    - echo "Node.js Version: 18.x or higher"

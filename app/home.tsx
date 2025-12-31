@@ -88,7 +88,7 @@ export default function HomePage() {
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 animateButton(createButtonScale);
-                router.push("/create-story");
+                router.push("/create-story" as any);
               }}
               activeOpacity={0.9}
             >
@@ -118,7 +118,7 @@ export default function HomePage() {
             style={styles.actionCard}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/my-stories");
+              router.push("/my-stories" as any);
             }}
             activeOpacity={0.8}
           >
@@ -131,7 +131,7 @@ export default function HomePage() {
               style={[styles.actionCard, styles.premiumCard]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push("/pricing");
+                router.push("/pricing" as any);
               }}
               activeOpacity={0.8}
             >
@@ -145,7 +145,7 @@ export default function HomePage() {
               style={styles.actionCard}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push("/admin");
+                router.push("/admin" as any);
               }}
               activeOpacity={0.8}
             >
@@ -172,7 +172,7 @@ export default function HomePage() {
           <TouchableOpacity 
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/about");
+              router.push("/about" as any);
             }} 
             activeOpacity={0.7}
           >
@@ -184,7 +184,7 @@ export default function HomePage() {
           style={styles.settingsButton}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push("/settings");
+            router.push("/settings" as any);
           }}
         >
           <Settings size={20} color="#4A90E2" />
