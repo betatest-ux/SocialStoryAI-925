@@ -121,6 +121,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     setIsRegistering(true);
     setRegisterError(undefined);
     try {
+      console.log('Registering user:', email);
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -128,6 +129,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           data: {
             name,
           },
+          emailRedirectTo: Platform.OS === 'web' ? window.location.origin : undefined,
         },
       });
 
@@ -138,25 +140,56 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       }
 
       if (authData.user) {
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert({
-            id: authData.user.id,
-            email: authData.user.email!,
-            name,
-            is_premium: false,
-            stories_generated: 0,
-            is_admin: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
+        console.log('Auth user created:', authData.user.id);
+        
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        let retries = 5;
+        let profileLoaded = false;
+        
+        while (retries > 0 && !profileLoaded) {
+          try {
+            const { data: existingProfile } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', authData.user.id)
+              .single();
+            
+            if (existingProfile) {
+              console.log('User profile found via trigger');
+              profileLoaded = true;
+              await loadUserProfile(authData.user.id);
+            } else {
+              console.log('Profile not found, attempting manual creation...');
+              const { error: profileError } = await supabase
+                .from('users')
+                .insert({
+                  id: authData.user.id,
+                  email: authData.user.email!,
+                  name,
+                  is_premium: false,
+                  stories_generated: 0,
+                  is_admin: false,
+                });
 
-        if (profileError) {
-          console.error('Error creating user profile:', profileError);
-          throw new Error(profileError.message);
+              if (profileError && !profileError.message.includes('duplicate')) {
+                console.error('Error creating user profile:', profileError);
+                throw new Error(profileError.message);
+              }
+              
+              profileLoaded = true;
+              await loadUserProfile(authData.user.id);
+            }
+          } catch (error: any) {
+            console.log(`Profile creation attempt failed, retries left: ${retries - 1}`, error.message);
+            retries--;
+            if (retries > 0) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            } else {
+              throw new Error('Failed to create user profile. Please contact support.');
+            }
+          }
         }
-
-        await loadUserProfile(authData.user.id);
       }
 
       return authData;
