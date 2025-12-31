@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-nati
 import { useRouter } from "expo-router";
 import { trpc } from "@/lib/trpc";
 import { BookOpen, Calendar } from "lucide-react-native";
+import { Header } from "@/components/Header";
 
 export default function MyStoriesPage() {
   const router = useRouter();
@@ -34,7 +35,9 @@ export default function MyStoriesPage() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.wrapper}>
+      <Header />
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>My Stories</Text>
       <Text style={styles.subtitle}>
         {stories.length} {stories.length === 1 ? "story" : "stories"} created
@@ -67,12 +70,17 @@ export default function MyStoriesPage() {
             </View>
           </View>
         </TouchableOpacity>
-      ))}
+      ))}  
     </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    backgroundColor: "#F8F9FD",
+  },
   container: {
     flex: 1,
     backgroundColor: "#F8F9FD",

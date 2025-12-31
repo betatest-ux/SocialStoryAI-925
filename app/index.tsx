@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useRef, useState } from "react";
 import { Sparkles, Heart, Shield, Zap, Users, ArrowRight, CheckCircle2, Star } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
+import { Header } from "@/components/Header";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -64,7 +65,9 @@ export default function LandingPage() {
   ];
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.wrapper}>
+      <Header />
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.heroSection}>
         <Animated.View 
           style={[
@@ -283,10 +286,15 @@ export default function LandingPage() {
         </View>
       </View>
     </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",

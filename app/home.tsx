@@ -2,12 +2,13 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated } from "
 import { useRouter } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Plus, Settings, Crown, LogOut } from "lucide-react-native";
+import { BookOpen, Plus, Settings, Crown } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
+import { Header } from "@/components/Header";
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading, logout, remainingFreeStories } = useAuth();
+  const { user, isAuthenticated, isLoading, remainingFreeStories } = useAuth();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const [createButtonScale] = useState(new Animated.Value(1));
@@ -60,31 +61,18 @@ export default function HomePage() {
   const remaining = remainingFreeStories();
 
   return (
-    <View style={styles.container}>
+    <View style={styles.wrapper}>
+      <Header />
+      <View style={styles.container}>
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Hello, {user.name}!</Text>
-          {!user.isPremium && (
+          {!user.isPremium && remaining !== null && (
             <Text style={styles.storiesRemaining}>
               {remaining} free {remaining === 1 ? "story" : "stories"} remaining
             </Text>
           )}
-          {user.isPremium && (
-            <View style={styles.premiumBadge}>
-              <Crown size={16} color="#FFD700" />
-              <Text style={styles.premiumText}>Premium</Text>
-            </View>
-          )}
         </View>
-        <TouchableOpacity 
-          onPress={() => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            logout();
-          }} 
-          style={styles.logoutButton}
-        >
-          <LogOut size={24} color="#E74C3C" />
-        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -218,11 +206,16 @@ export default function HomePage() {
           </TouchableOpacity>
         )}
       </ScrollView>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    backgroundColor: "#F5F7FA",
+  },
   container: {
     flex: 1,
     backgroundColor: "#F5F7FA",
@@ -238,11 +231,7 @@ const styles = StyleSheet.create({
     color: "#666",
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
     padding: 24,
-    paddingTop: 60,
     backgroundColor: "#FFFFFF",
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
@@ -264,32 +253,7 @@ const styles = StyleSheet.create({
     color: "#718096",
     fontWeight: "500" as const,
   },
-  premiumBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    backgroundColor: "#FFF9E6",
-    borderRadius: 14,
-    alignSelf: "flex-start",
-    borderWidth: 1,
-    borderColor: "#FFE9B3",
-  },
-  premiumText: {
-    fontSize: 15,
-    fontWeight: "700" as const,
-    color: "#F39C12",
-    letterSpacing: 0.3,
-  },
-  logoutButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#FFEBEE",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+
   content: {
     flex: 1,
     padding: 24,
