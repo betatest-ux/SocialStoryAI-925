@@ -1,4 +1,4 @@
-import { getDatabase } from '../db/connection';
+import { supabaseAdmin } from '../db/connection';
 
 const RATE_LIMITS = {
   login: { max: 5, window: 15 * 60 * 1000 },
@@ -6,90 +6,86 @@ const RATE_LIMITS = {
   api: { max: 100, window: 60 * 1000 },
 };
 
-export function checkRateLimit(identifier: string, endpoint: string): boolean {
-  const db = getDatabase();
+export async function checkRateLimit(identifier: string, endpoint: string): Promise<boolean> {
   const now = Date.now();
   
-  const cleanupStmt = db.prepare('DELETE FROM rate_limits WHERE reset_at < ?');
-  cleanupStmt.run(now);
+  await supabaseAdmin
+    .from('rate_limits')
+    .delete()
+    .lt('reset_at', now);
   
-  const stmt = db.prepare(`
-    SELECT count, reset_at FROM rate_limits 
-    WHERE identifier = ? AND endpoint = ?
-    LIMIT 1
-  `);
-  
-  const existing = stmt.get(identifier, endpoint) as { count: number; reset_at: number } | undefined;
+  const { data: existing } = await supabaseAdmin
+    .from('rate_limits')
+    .select('count, reset_at')
+    .eq('identifier', identifier)
+    .eq('endpoint', endpoint)
+    .maybeSingle();
   
   const limit = RATE_LIMITS[endpoint as keyof typeof RATE_LIMITS] || RATE_LIMITS.api;
   
   if (existing) {
-    if (now > existing.reset_at) {
-      const deleteStmt = db.prepare('DELETE FROM rate_limits WHERE identifier = ? AND endpoint = ?');
-      deleteStmt.run(identifier, endpoint);
+    if (now > (existing as any).reset_at) {
+      await supabaseAdmin
+        .from('rate_limits')
+        .delete()
+        .eq('identifier', identifier)
+        .eq('endpoint', endpoint);
       
-      const insertStmt = db.prepare(`
-        INSERT INTO rate_limits (id, identifier, endpoint, count, reset_at, created_at)
-        VALUES (?, ?, ?, 1, ?, ?)
-      `);
-      insertStmt.run(
-        `${identifier}_${endpoint}_${now}`,
-        identifier,
-        endpoint,
-        now + limit.window,
-        new Date().toISOString()
-      );
+      await supabaseAdmin
+        .from('rate_limits')
+        .insert([{
+          id: `${identifier}_${endpoint}_${now}`,
+          identifier,
+          endpoint,
+          count: 1,
+          reset_at: now + limit.window,
+        }] as any);
       
       return true;
     }
     
-    if (existing.count >= limit.max) {
+    if ((existing as any).count >= limit.max) {
       return false;
     }
     
-    const updateStmt = db.prepare(`
-      UPDATE rate_limits SET count = count + 1
-      WHERE identifier = ? AND endpoint = ?
-    `);
-    updateStmt.run(identifier, endpoint);
+    // @ts-expect-error - Supabase update with dynamic fields
+    const updateQuery: any = supabaseAdmin.from('rate_limits').update({ count: (existing as any).count + 1 });
+    await updateQuery.eq('identifier', identifier).eq('endpoint', endpoint);
     
     return true;
   }
   
-  const insertStmt = db.prepare(`
-    INSERT INTO rate_limits (id, identifier, endpoint, count, reset_at, created_at)
-    VALUES (?, ?, ?, 1, ?, ?)
-  `);
-  insertStmt.run(
-    `${identifier}_${endpoint}_${now}`,
-    identifier,
-    endpoint,
-    now + limit.window,
-    new Date().toISOString()
-  );
+  await supabaseAdmin
+    .from('rate_limits')
+    .insert([{
+      id: `${identifier}_${endpoint}_${now}`,
+      identifier,
+      endpoint,
+      count: 1,
+      reset_at: now + limit.window,
+    }] as any);
   
   return true;
 }
 
-export function getRateLimitInfo(identifier: string, endpoint: string): { remaining: number; resetAt: number } | null {
-  const db = getDatabase();
+export async function getRateLimitInfo(identifier: string, endpoint: string): Promise<{ remaining: number; resetAt: number } | null> {
   const now = Date.now();
   
-  const stmt = db.prepare(`
-    SELECT count, reset_at FROM rate_limits 
-    WHERE identifier = ? AND endpoint = ?
-    LIMIT 1
-  `);
+  const { data: existing } = await supabaseAdmin
+    .from('rate_limits')
+    .select('count, reset_at')
+    .eq('identifier', identifier)
+    .eq('endpoint', endpoint)
+    .maybeSingle();
   
-  const existing = stmt.get(identifier, endpoint) as { count: number; reset_at: number } | undefined;
   const limit = RATE_LIMITS[endpoint as keyof typeof RATE_LIMITS] || RATE_LIMITS.api;
   
-  if (!existing || now > existing.reset_at) {
+  if (!existing || now > (existing as any).reset_at) {
     return { remaining: limit.max, resetAt: now + limit.window };
   }
   
   return {
-    remaining: Math.max(0, limit.max - existing.count),
-    resetAt: existing.reset_at,
+    remaining: Math.max(0, limit.max - (existing as any).count),
+    resetAt: (existing as any).reset_at,
   };
 }

@@ -20,8 +20,8 @@ export const storiesRouter = createTRPCRouter({
       content: z.string(),
       images: z.array(z.string()),
     }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user) {
         throw new Error("User not found");
       }
@@ -30,7 +30,7 @@ export const storiesRouter = createTRPCRouter({
         throw new Error("Free limit reached. Please upgrade to premium.");
       }
 
-      const story = createStory({
+      const story = await createStory({
         userId: ctx.userId,
         childName: input.childName,
         situation: input.situation,
@@ -41,7 +41,7 @@ export const storiesRouter = createTRPCRouter({
         images: input.images,
       });
 
-      updateUser(ctx.userId, { 
+      await updateUser(ctx.userId, { 
         storiesGenerated: user.storiesGenerated + 1 
       });
 
@@ -50,16 +50,16 @@ export const storiesRouter = createTRPCRouter({
 
   get: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(({ ctx, input }) => {
-      const story = getStory(input.id);
+    .query(async ({ ctx, input }) => {
+      const story = await getStory(input.id);
       if (!story || story.userId !== ctx.userId) {
         throw new Error("Story not found");
       }
       return story;
     }),
 
-  list: protectedProcedure.query(({ ctx }) => {
-    return getUserStories(ctx.userId);
+  list: protectedProcedure.query(async ({ ctx }) => {
+    return await getUserStories(ctx.userId);
   }),
 
   update: protectedProcedure
@@ -69,13 +69,13 @@ export const storiesRouter = createTRPCRouter({
       images: z.array(z.string()).optional(),
       videoUrl: z.string().optional(),
     }))
-    .mutation(({ ctx, input }) => {
-      const story = getStory(input.id);
+    .mutation(async ({ ctx, input }) => {
+      const story = await getStory(input.id);
       if (!story || story.userId !== ctx.userId) {
         throw new Error("Story not found");
       }
 
-      updateStory(input.id, {
+      await updateStory(input.id, {
         content: input.content,
         images: input.images,
         videoUrl: input.videoUrl,
@@ -86,25 +86,25 @@ export const storiesRouter = createTRPCRouter({
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(({ ctx, input }) => {
-      const story = getStory(input.id);
+    .mutation(async ({ ctx, input }) => {
+      const story = await getStory(input.id);
       if (!story || story.userId !== ctx.userId) {
         throw new Error("Story not found");
       }
 
-      deleteStory(input.id);
+      await deleteStory(input.id);
       return { success: true };
     }),
 
   generateVideo: protectedProcedure
     .input(z.object({ storyId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+      const user = await getUserData(ctx.userId);
       if (!user?.isPremium) {
         throw new Error("Video generation is only available for premium users");
       }
       
-      const story = getStory(input.storyId);
+      const story = await getStory(input.storyId);
       if (!story) {
         throw new Error("Story not found");
       }
@@ -114,7 +114,7 @@ export const storiesRouter = createTRPCRouter({
       }
 
       const videoUrl = `https://storage.socialstoryai.com/videos/${input.storyId}.mp4`;
-      updateStory(input.storyId, { videoUrl });
+      await updateStory(input.storyId, { videoUrl });
       
       console.log(`Video generation initiated for story ${input.storyId}`);
       

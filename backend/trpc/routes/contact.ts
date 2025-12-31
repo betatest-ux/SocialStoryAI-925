@@ -12,8 +12,8 @@ export const contactRouter = createTRPCRouter({
       subject: z.string().min(1),
       message: z.string().min(10),
     }))
-    .mutation(({ input, ctx }) => {
-      const request = createContactRequest({
+    .mutation(async ({ input, ctx }) => {
+      const request = await createContactRequest({
         ...input,
         userId: ctx.userId || undefined,
       });
@@ -21,24 +21,24 @@ export const contactRouter = createTRPCRouter({
       return { success: true, requestId: request.id };
     }),
 
-  getAll: protectedProcedure.query(({ ctx }) => {
-    const user = getUserData(ctx.userId);
+  getAll: protectedProcedure.query(async ({ ctx }) => {
+    const user = await getUserData(ctx.userId);
     if (!user?.isAdmin) {
       throw new Error("Unauthorized");
     }
 
-    return getAllContactRequests();
+    return await getAllContactRequests();
   }),
 
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .query(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
 
-      const request = getContactRequest(input.id);
+      const request = await getContactRequest(input.id);
       if (!request) {
         throw new Error("Contact request not found");
       }
@@ -51,13 +51,13 @@ export const contactRouter = createTRPCRouter({
       id: z.string(),
       status: z.enum(['pending', 'in-progress', 'resolved']),
     }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
 
-      updateContactRequest(input.id, { status: input.status });
+      await updateContactRequest(input.id, { status: input.status });
       return { success: true };
     }),
 
@@ -67,12 +67,12 @@ export const contactRouter = createTRPCRouter({
       reply: z.string().min(1),
     }))
     .mutation(async ({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
 
-      const request = getContactRequest(input.id);
+      const request = await getContactRequest(input.id);
       if (!request) {
         throw new Error("Contact request not found");
       }
@@ -95,7 +95,7 @@ export const contactRouter = createTRPCRouter({
           `
         );
 
-        updateContactRequest(input.id, {
+        await updateContactRequest(input.id, {
           adminReply: input.reply,
           repliedAt: new Date().toISOString(),
           status: 'resolved',
@@ -109,18 +109,18 @@ export const contactRouter = createTRPCRouter({
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
 
-      deleteContactRequest(input.id);
+      await deleteContactRequest(input.id);
       return { success: true };
     }),
 
-  getMailConfig: protectedProcedure.query(({ ctx }) => {
-    const user = getUserData(ctx.userId);
+  getMailConfig: protectedProcedure.query(async ({ ctx }) => {
+    const user = await getUserData(ctx.userId);
     if (!user?.isAdmin) {
       throw new Error("Unauthorized");
     }
@@ -142,8 +142,8 @@ export const contactRouter = createTRPCRouter({
       fromEmail: z.string().email().optional(),
       fromName: z.string().optional(),
     }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
@@ -153,7 +153,7 @@ export const contactRouter = createTRPCRouter({
     }),
 
   testMailConnection: protectedProcedure.mutation(async ({ ctx }) => {
-    const user = getUserData(ctx.userId);
+    const user = await getUserData(ctx.userId);
     if (!user?.isAdmin) {
       throw new Error("Unauthorized");
     }

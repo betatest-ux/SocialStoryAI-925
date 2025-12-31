@@ -6,14 +6,14 @@ import { z } from "zod";
 import bcrypt from 'bcryptjs';
 
 export const adminRouter = createTRPCRouter({
-  analytics: protectedProcedure.query(({ ctx }) => {
-    const user = getUserData(ctx.userId);
+  analytics: protectedProcedure.query(async ({ ctx }) => {
+    const user = await getUserData(ctx.userId);
     if (!user?.isAdmin) {
       throw new Error("Unauthorized");
     }
 
-    const users = getAllUsers();
-    const stories = getAllStories();
+    const users = await getAllUsers();
+    const stories = await getAllStories();
 
     const totalUsers = users.length;
     const premiumUsers = users.filter((u) => u.isPremium).length;
@@ -37,13 +37,14 @@ export const adminRouter = createTRPCRouter({
     };
   }),
 
-  users: protectedProcedure.query(({ ctx }) => {
-    const user = getUserData(ctx.userId);
+  users: protectedProcedure.query(async ({ ctx }) => {
+    const user = await getUserData(ctx.userId);
     if (!user?.isAdmin) {
       throw new Error("Unauthorized");
     }
 
-    return getAllUsers().map((u) => ({
+    const allUsers = await getAllUsers();
+    return allUsers.map((u) => ({
       id: u.id,
       email: u.email,
       name: u.name,
@@ -56,24 +57,24 @@ export const adminRouter = createTRPCRouter({
     }));
   }),
 
-  stories: protectedProcedure.query(({ ctx }) => {
-    const user = getUserData(ctx.userId);
+  stories: protectedProcedure.query(async ({ ctx }) => {
+    const user = await getUserData(ctx.userId);
     if (!user?.isAdmin) {
       throw new Error("Unauthorized");
     }
 
-    return getAllStories();
+    return await getAllStories();
   }),
 
   togglePremium: protectedProcedure
     .input(z.object({ userId: z.string() }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
 
-      const targetUser = getUserData(input.userId);
+      const targetUser = await getUserData(input.userId);
       if (!targetUser) {
         throw new Error("User not found");
       }
@@ -89,8 +90,8 @@ export const adminRouter = createTRPCRouter({
         updates.subscriptionEndDate = undefined;
       }
 
-      updateUser(input.userId, updates);
-      addActivityLog(
+      await updateUser(input.userId, updates);
+      await addActivityLog(
         "toggle_premium",
         ctx.userId,
         `Changed premium status for ${targetUser.email} to ${newPremiumStatus}`
@@ -104,13 +105,13 @@ export const adminRouter = createTRPCRouter({
       userId: z.string(),
       months: z.number().min(1).max(12),
     }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
 
-      const targetUser = getUserData(input.userId);
+      const targetUser = await getUserData(input.userId);
       if (!targetUser) {
         throw new Error("User not found");
       }
@@ -121,12 +122,12 @@ export const adminRouter = createTRPCRouter({
       
       currentEndDate.setMonth(currentEndDate.getMonth() + input.months);
       
-      updateUser(input.userId, { 
+      await updateUser(input.userId, { 
         isPremium: true,
         subscriptionEndDate: currentEndDate.toISOString(),
       });
       
-      addActivityLog(
+      await addActivityLog(
         "extend_subscription",
         ctx.userId,
         `Extended subscription for ${targetUser.email} by ${input.months} months`
@@ -140,21 +141,21 @@ export const adminRouter = createTRPCRouter({
       userId: z.string(),
       newPassword: z.string().min(6),
     }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
 
-      const targetUser = getUserData(input.userId);
+      const targetUser = await getUserData(input.userId);
       if (!targetUser) {
         throw new Error("User not found");
       }
 
       const hashedPassword = bcrypt.hashSync(input.newPassword, 10);
-      updateUser(input.userId, { password: hashedPassword });
+      await updateUser(input.userId, { password: hashedPassword });
       
-      addActivityLog(
+      await addActivityLog(
         "reset_password",
         ctx.userId,
         `Reset password for ${targetUser.email}`
@@ -165,19 +166,19 @@ export const adminRouter = createTRPCRouter({
 
   toggleAdmin: protectedProcedure
     .input(z.object({ userId: z.string() }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
 
-      const targetUser = getUserData(input.userId);
+      const targetUser = await getUserData(input.userId);
       if (!targetUser) {
         throw new Error("User not found");
       }
 
-      updateUser(input.userId, { isAdmin: !targetUser.isAdmin });
-      addActivityLog(
+      await updateUser(input.userId, { isAdmin: !targetUser.isAdmin });
+      await addActivityLog(
         "toggle_admin",
         ctx.userId,
         `Changed admin status for ${targetUser.email} to ${!targetUser.isAdmin}`
@@ -188,44 +189,44 @@ export const adminRouter = createTRPCRouter({
 
   deleteUser: protectedProcedure
     .input(z.object({ userId: z.string() }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
 
-      const targetUser = getUserData(input.userId);
+      const targetUser = await getUserData(input.userId);
       if (!targetUser) {
         throw new Error("User not found");
       }
 
-      deleteUser(input.userId);
-      addActivityLog("delete_user", ctx.userId, `Deleted user ${targetUser.email}`);
+      await deleteUser(input.userId);
+      await addActivityLog("delete_user", ctx.userId, `Deleted user ${targetUser.email}`);
 
       return { success: true };
     }),
 
   deleteStory: protectedProcedure
     .input(z.object({ storyId: z.string() }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
 
-      deleteStory(input.storyId);
-      addActivityLog("delete_story", ctx.userId, `Deleted story ${input.storyId}`);
+      await deleteStory(input.storyId);
+      await addActivityLog("delete_story", ctx.userId, `Deleted story ${input.storyId}`);
 
       return { success: true };
     }),
 
-  getSettings: protectedProcedure.query(({ ctx }) => {
-    const user = getUserData(ctx.userId);
+  getSettings: protectedProcedure.query(async ({ ctx }) => {
+    const user = await getUserData(ctx.userId);
     if (!user?.isAdmin) {
       throw new Error("Unauthorized");
     }
 
-    return getAdminSettings();
+    return await getAdminSettings();
   }),
 
   updateSettings: protectedProcedure
@@ -237,26 +238,26 @@ export const adminRouter = createTRPCRouter({
         premiumPrice: z.number().optional(),
       })
     )
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
 
-      updateAdminSettings(input);
-      addActivityLog("update_settings", ctx.userId, `Updated app settings`);
+      await updateAdminSettings(input);
+      await addActivityLog("update_settings", ctx.userId, `Updated app settings`);
 
-      return getAdminSettings();
+      return await getAdminSettings();
     }),
 
-  getActivityLogs: protectedProcedure.query(({ ctx }) => {
-    const user = getUserData(ctx.userId);
+  getActivityLogs: protectedProcedure.query(async ({ ctx }) => {
+    const user = await getUserData(ctx.userId);
     if (!user?.isAdmin) {
       throw new Error("Unauthorized");
     }
 
-    const users = getAllUsers();
-    const logs = getActivityLogs();
+    const users = await getAllUsers();
+    const logs = await getActivityLogs();
     return logs.map((log) => {
       const logUser = users.find((u) => u.id === log.userId);
       return {
@@ -267,13 +268,13 @@ export const adminRouter = createTRPCRouter({
     });
   }),
 
-  getApiKeys: protectedProcedure.query(({ ctx }) => {
-    const user = getUserData(ctx.userId);
+  getApiKeys: protectedProcedure.query(async ({ ctx }) => {
+    const user = await getUserData(ctx.userId);
     if (!user?.isAdmin) {
       throw new Error("Unauthorized");
     }
 
-    const keys = getApiKeys();
+    const keys = await getApiKeys();
     return {
       openaiKey: keys.openaiKey || '',
       geminiKey: keys.geminiKey || '',
@@ -297,16 +298,16 @@ export const adminRouter = createTRPCRouter({
         googleOAuthAndroidClientId: z.string().optional(),
       })
     )
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
 
-      updateApiKeys(input);
-      addActivityLog("update_api_keys", ctx.userId, "Updated API keys configuration");
+      await updateApiKeys(input);
+      await addActivityLog("update_api_keys", ctx.userId, "Updated API keys configuration");
 
-      const keys = getApiKeys();
+      const keys = await getApiKeys();
       return {
         openaiKey: keys.openaiKey || '',
         geminiKey: keys.geminiKey || '',

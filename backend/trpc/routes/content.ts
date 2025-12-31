@@ -21,22 +21,23 @@ import { getUserData } from "@/backend/db/users";
 import { z } from "zod";
 
 export const contentRouter = createTRPCRouter({
-  getAllPages: publicProcedure.query(() => {
-    return getAllPages().filter(p => p.isPublished);
+  getAllPages: publicProcedure.query(async () => {
+    const pages = await getAllPages();
+    return pages.filter(p => p.isPublished);
   }),
 
-  getAllPagesAdmin: protectedProcedure.query(({ ctx }) => {
-    const user = getUserData(ctx.userId);
+  getAllPagesAdmin: protectedProcedure.query(async ({ ctx }) => {
+    const user = await getUserData(ctx.userId);
     if (!user?.isAdmin) {
       throw new Error("Unauthorized");
     }
-    return getAllPages();
+    return await getAllPages();
   }),
 
   getPage: publicProcedure
     .input(z.object({ slug: z.string() }))
-    .query(({ input }) => {
-      const page = getPage(input.slug);
+    .query(async ({ input }) => {
+      const page = await getPage(input.slug);
       if (!page) {
         throw new Error("Page not found");
       }
@@ -45,12 +46,12 @@ export const contentRouter = createTRPCRouter({
 
   getPageWithContent: publicProcedure
     .input(z.object({ slug: z.string() }))
-    .query(({ input }) => {
-      const page = getPage(input.slug);
+    .query(async ({ input }) => {
+      const page = await getPage(input.slug);
       if (!page) {
         throw new Error("Page not found");
       }
-      const contents = getPageContents(page.id);
+      const contents = await getPageContents(page.id);
       return { page, contents };
     }),
 
@@ -65,12 +66,12 @@ export const contentRouter = createTRPCRouter({
       showFooter: z.boolean().optional(),
       metadata: z.record(z.string(), z.any()).optional(),
     }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
-      return createPage({
+      return await createPage({
         slug: input.slug,
         title: input.title,
         isPublished: input.isPublished ?? false,
@@ -94,31 +95,31 @@ export const contentRouter = createTRPCRouter({
       showFooter: z.boolean().optional(),
       metadata: z.record(z.string(), z.any()).optional(),
     }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
       const { pageId, ...updates } = input;
-      updatePage(pageId, updates);
+      await updatePage(pageId, updates);
       return { success: true };
     }),
 
   deletePage: protectedProcedure
     .input(z.object({ pageId: z.string() }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
-      deletePage(input.pageId);
+      await deletePage(input.pageId);
       return { success: true };
     }),
 
   getPageContents: publicProcedure
     .input(z.object({ pageId: z.string() }))
-    .query(({ input }) => {
-      return getPageContents(input.pageId);
+    .query(async ({ input }) => {
+      return await getPageContents(input.pageId);
     }),
 
   getPageContentsBySection: publicProcedure
@@ -126,8 +127,8 @@ export const contentRouter = createTRPCRouter({
       pageId: z.string(),
       sectionId: z.string(),
     }))
-    .query(({ input }) => {
-      return getPageContentsBySection(input.pageId, input.sectionId);
+    .query(async ({ input }) => {
+      return await getPageContentsBySection(input.pageId, input.sectionId);
     }),
 
   createPageContent: protectedProcedure
@@ -140,12 +141,12 @@ export const contentRouter = createTRPCRouter({
       styles: z.record(z.string(), z.any()).optional(),
       metadata: z.record(z.string(), z.any()).optional(),
     }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
-      return createPageContent(input);
+      return await createPageContent(input);
     }),
 
   updatePageContent: protectedProcedure
@@ -159,24 +160,24 @@ export const contentRouter = createTRPCRouter({
       styles: z.record(z.string(), z.any()).optional(),
       metadata: z.record(z.string(), z.any()).optional(),
     }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
       const { contentId, ...updates } = input;
-      updatePageContent(contentId, updates);
+      await updatePageContent(contentId, updates);
       return { success: true };
     }),
 
   deletePageContent: protectedProcedure
     .input(z.object({ contentId: z.string() }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
-      deletePageContent(input.contentId);
+      await deletePageContent(input.contentId);
       return { success: true };
     }),
 
@@ -186,17 +187,17 @@ export const contentRouter = createTRPCRouter({
       sectionId: z.string(),
       contentIds: z.array(z.string()),
     }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
-      reorderPageContents(input.pageId, input.sectionId, input.contentIds);
+      await reorderPageContents(input.pageId, input.sectionId, input.contentIds);
       return { success: true };
     }),
 
-  getThemeSettings: publicProcedure.query(() => {
-    return getThemeSettings();
+  getThemeSettings: publicProcedure.query(async () => {
+    return await getThemeSettings();
   }),
 
   updateThemeSettings: protectedProcedure
@@ -219,22 +220,22 @@ export const contentRouter = createTRPCRouter({
       footerHeight: z.number().optional(),
       customCSS: z.string().optional(),
     }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
-      return updateThemeSettings(input);
+      return await updateThemeSettings(input);
     }),
 
   getHeaderFooterContent: publicProcedure
     .input(z.object({ type: z.enum(['header', 'footer']) }))
-    .query(({ input }) => {
-      return getHeaderFooterContent(input.type);
+    .query(async ({ input }) => {
+      return await getHeaderFooterContent(input.type);
     }),
 
-  getAllHeaderFooterContents: publicProcedure.query(() => {
-    return getAllHeaderFooterContents();
+  getAllHeaderFooterContents: publicProcedure.query(async () => {
+    return await getAllHeaderFooterContents();
   }),
 
   updateHeaderFooterContent: protectedProcedure
@@ -251,13 +252,13 @@ export const contentRouter = createTRPCRouter({
       showUserMenu: z.boolean().optional(),
       customHTML: z.string().optional(),
     }))
-    .mutation(({ ctx, input }) => {
-      const user = getUserData(ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserData(ctx.userId);
       if (!user?.isAdmin) {
         throw new Error("Unauthorized");
       }
       const { type, ...updates } = input;
-      updateHeaderFooterContent(type, updates);
+      await updateHeaderFooterContent(type, updates);
       return { success: true };
     }),
 });
