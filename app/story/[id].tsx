@@ -135,14 +135,10 @@ export default function StoryPage() {
 
       const { uri } = await Print.printToFileAsync({ html });
 
-      if (Platform.OS === "web") {
-        Alert.alert("Success", "PDF created successfully");
+      if (Platform.OS !== "web" && await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri);
       } else {
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(uri);
-        } else {
-          Alert.alert("Success", "PDF saved successfully");
-        }
+        Alert.alert("Success", "PDF created successfully");
       }
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to export PDF");

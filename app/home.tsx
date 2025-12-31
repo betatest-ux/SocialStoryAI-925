@@ -180,31 +180,16 @@ export default function HomePage() {
           </TouchableOpacity>
         </Animated.View>
 
-        {!user.isPremium && (
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/settings");
-            }}
-          >
-            <Settings size={20} color="#4A90E2" />
-            <Text style={styles.settingsButtonText}>Account Settings</Text>
-          </TouchableOpacity>
-        )}
-
-        {user.isPremium && (
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/settings");
-            }}
-          >
-            <Settings size={20} color="#4A90E2" />
-            <Text style={styles.settingsButtonText}>Account Settings</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push("/settings");
+          }}
+        >
+          <Settings size={20} color="#4A90E2" />
+          <Text style={styles.settingsButtonText}>Account Settings</Text>
+        </TouchableOpacity>
       </ScrollView>
       </View>
     </View>
