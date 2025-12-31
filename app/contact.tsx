@@ -1,7 +1,7 @@
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Animated } from "react-native";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import { Mail, MessageCircle, Send, User } from "lucide-react-native";
+import { useState, useRef, useEffect } from "react";
+import { Mail, MessageCircle, Send, User, CheckCircle } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,8 +13,34 @@ export default function ContactPage() {
   const [email, setEmail] = useState(user?.email || "");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 9,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
   const submitMutation = trpc.contact.submit.useMutation();
+
+  const handleHaptic = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!name.trim() || !email.trim() || !subject.trim() || !message.trim()) {
@@ -33,7 +59,7 @@ export default function ContactPage() {
     }
 
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      handleHaptic();
       await submitMutation.mutateAsync({
         name: name.trim(),
         email: email.trim(),
@@ -41,12 +67,7 @@ export default function ContactPage() {
         message: message.trim(),
       });
 
-      Alert.alert(
-        "Success",
-        "Your message has been sent! We'll get back to you soon.",
-        [{ text: "OK", onPress: () => router.back() }]
-      );
-
+      setSubmitted(true);
       setSubject("");
       setMessage("");
     } catch (error: any) {
@@ -54,32 +75,105 @@ export default function ContactPage() {
     }
   };
 
+  if (submitted) {
+    return (
+      <View style={styles.successContainer}>
+        <Animated.View 
+          style={[
+            styles.successContent,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <View style={styles.successIcon}>
+            <CheckCircle size={48} color="#10B981" />
+          </View>
+          <Text style={styles.successTitle}>Message Sent!</Text>
+          <Text style={styles.successText}>
+            Thank you for reaching out. We&apos;ll get back to you within 24-48 hours.
+          </Text>
+          <TouchableOpacity
+            style={styles.successButton}
+            onPress={() => {
+              handleHaptic();
+              router.back();
+            }}
+          >
+            <Text style={styles.successButtonText}>Back to App</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.anotherButton}
+            onPress={() => {
+              setSubmitted(false);
+              Animated.parallel([
+                Animated.timing(fadeAnim, {
+                  toValue: 1,
+                  duration: 400,
+                  useNativeDriver: true,
+                }),
+                Animated.spring(slideAnim, {
+                  toValue: 0,
+                  tension: 50,
+                  friction: 9,
+                  useNativeDriver: true,
+                }),
+              ]).start();
+            }}
+          >
+            <Text style={styles.anotherButtonText}>Send Another Message</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView 
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.header}>
+      <ScrollView 
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View 
+          style={[
+            styles.header,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
           <View style={styles.iconContainer}>
-            <Mail size={40} color="#3B82F6" />
+            <Mail size={36} color="#3B82F6" />
           </View>
           <Text style={styles.title}>Get in Touch</Text>
           <Text style={styles.subtitle}>
             Have a question or need support? We&apos;re here to help!
           </Text>
-        </View>
+        </Animated.View>
 
-        <View style={styles.form}>
+        <Animated.View 
+          style={[
+            styles.form,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
           <View style={styles.inputGroup}>
             <View style={styles.inputLabel}>
-              <User size={20} color="#6B7280" />
+              <User size={18} color="#64748B" />
               <Text style={styles.labelText}>Your Name</Text>
             </View>
             <TextInput
               style={styles.input}
               placeholder="Enter your name"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor="#94A3B8"
               value={name}
               onChangeText={setName}
             />
@@ -87,13 +181,13 @@ export default function ContactPage() {
 
           <View style={styles.inputGroup}>
             <View style={styles.inputLabel}>
-              <Mail size={20} color="#6B7280" />
+              <Mail size={18} color="#64748B" />
               <Text style={styles.labelText}>Email Address</Text>
             </View>
             <TextInput
               style={styles.input}
               placeholder="your.email@example.com"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor="#94A3B8"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -103,13 +197,13 @@ export default function ContactPage() {
 
           <View style={styles.inputGroup}>
             <View style={styles.inputLabel}>
-              <MessageCircle size={20} color="#6B7280" />
+              <MessageCircle size={18} color="#64748B" />
               <Text style={styles.labelText}>Subject</Text>
             </View>
             <TextInput
               style={styles.input}
               placeholder="What can we help you with?"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor="#94A3B8"
               value={subject}
               onChangeText={setSubject}
             />
@@ -117,13 +211,13 @@ export default function ContactPage() {
 
           <View style={styles.inputGroup}>
             <View style={styles.inputLabel}>
-              <MessageCircle size={20} color="#6B7280" />
+              <MessageCircle size={18} color="#64748B" />
               <Text style={styles.labelText}>Message</Text>
             </View>
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="Tell us more about your inquiry..."
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor="#94A3B8"
               value={message}
               onChangeText={setMessage}
               multiline
@@ -136,6 +230,7 @@ export default function ContactPage() {
             style={[styles.submitButton, submitMutation.isPending && styles.submitButtonDisabled]}
             onPress={handleSubmit}
             disabled={submitMutation.isPending}
+            activeOpacity={0.8}
           >
             {submitMutation.isPending ? (
               <Text style={styles.submitButtonText}>Sending...</Text>
@@ -146,15 +241,30 @@ export default function ContactPage() {
               </>
             )}
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
-        <View style={styles.infoSection}>
+        <Animated.View 
+          style={[
+            styles.infoSection,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
           <Text style={styles.infoTitle}>Other Ways to Reach Us</Text>
           <View style={styles.infoCard}>
-            <Text style={styles.infoText}>📧 Email: support@socialstoryai.com</Text>
-            <Text style={styles.infoText}>⏰ Response Time: Within 24-48 hours</Text>
+            <View style={styles.infoRow}>
+              <Mail size={18} color="#3B82F6" />
+              <Text style={styles.infoText}>support@socialstoryai.com</Text>
+            </View>
+            <View style={styles.infoDivider} />
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Response Time:</Text>
+              <Text style={styles.infoValue}>24-48 hours</Text>
+            </View>
           </View>
-        </View>
+        </Animated.View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -163,7 +273,7 @@ export default function ContactPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F8FAFC",
   },
   content: {
     padding: 20,
@@ -171,35 +281,35 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center",
-    marginBottom: 30,
+    marginBottom: 28,
   },
   iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 72,
+    height: 72,
+    borderRadius: 20,
     backgroundColor: "#EFF6FF",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#111827",
+    fontSize: 26,
+    fontWeight: "800" as const,
+    color: "#0F172A",
     marginBottom: 8,
     textAlign: "center",
   },
   subtitle: {
-    fontSize: 16,
-    color: "#6B7280",
+    fontSize: 15,
+    color: "#64748B",
     textAlign: "center",
-    lineHeight: 24,
+    lineHeight: 22,
   },
   form: {
-    marginBottom: 30,
+    marginBottom: 24,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 18,
   },
   inputLabel: {
     flexDirection: "row",
@@ -208,18 +318,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   labelText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#374151",
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: "#334155",
   },
   input: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#E2E8F0",
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
-    color: "#111827",
+    color: "#0F172A",
   },
   textArea: {
     minHeight: 120,
@@ -232,8 +342,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    marginTop: 10,
+    gap: 10,
+    marginTop: 8,
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   submitButtonDisabled: {
     opacity: 0.6,
@@ -241,28 +356,108 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: "#FFFFFF",
     fontSize: 17,
-    fontWeight: "600",
+    fontWeight: "700" as const,
   },
   infoSection: {
-    marginTop: 20,
+    marginTop: 8,
   },
   infoTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#111827",
+    fontSize: 17,
+    fontWeight: "700" as const,
+    color: "#0F172A",
     marginBottom: 12,
   },
   infoCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 14,
+    padding: 18,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: 12,
+    borderColor: "#E2E8F0",
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   infoText: {
     fontSize: 15,
-    color: "#6B7280",
+    color: "#334155",
+    fontWeight: "500" as const,
+  },
+  infoDivider: {
+    height: 1,
+    backgroundColor: "#E2E8F0",
+    marginVertical: 14,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: "#64748B",
+    fontWeight: "500" as const,
+  },
+  infoValue: {
+    fontSize: 14,
+    color: "#0F172A",
+    fontWeight: "600" as const,
+  },
+  successContainer: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  successContent: {
+    alignItems: "center",
+    maxWidth: 320,
+  },
+  successIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: "#ECFDF5",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+  },
+  successTitle: {
+    fontSize: 26,
+    fontWeight: "800" as const,
+    color: "#0F172A",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  successText: {
+    fontSize: 15,
+    color: "#64748B",
+    textAlign: "center",
     lineHeight: 22,
+    marginBottom: 32,
+  },
+  successButton: {
+    backgroundColor: "#3B82F6",
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    width: "100%",
+    alignItems: "center",
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  successButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700" as const,
+  },
+  anotherButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+  },
+  anotherButtonText: {
+    color: "#3B82F6",
+    fontSize: 15,
+    fontWeight: "600" as const,
   },
 });

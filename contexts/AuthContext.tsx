@@ -103,12 +103,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       }
 
       if (data.user) {
+        console.log('Login successful, loading user profile...');
         await supabase
           .from('users')
           .update({ last_login_at: new Date().toISOString() })
           .eq('id', data.user.id);
 
         await loadUserProfile(data.user.id);
+        console.log('User profile loaded after login');
       }
 
       return data;

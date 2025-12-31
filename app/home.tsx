@@ -1,8 +1,8 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Plus, Settings, Crown } from "lucide-react-native";
+import { BookOpen, Plus, Crown, Sparkles, ChevronRight } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { Header } from "@/components/Header";
 
@@ -10,24 +10,38 @@ export default function HomePage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, remainingFreeStories } = useAuth();
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
   const [createButtonScale] = useState(new Animated.Value(1));
+  const cardAnims = useRef([
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 600,
+        duration: 500,
         useNativeDriver: true,
       }),
       Animated.spring(slideAnim, {
         toValue: 0,
-        tension: 30,
-        friction: 8,
+        tension: 50,
+        friction: 9,
         useNativeDriver: true,
       }),
     ]).start();
-  }, [fadeAnim, slideAnim]);
+
+    cardAnims.forEach((anim, index) => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 400,
+        delay: 200 + index * 100,
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [fadeAnim, slideAnim, cardAnims]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -38,21 +52,36 @@ export default function HomePage() {
   const animateButton = (scale: Animated.Value) => {
     Animated.sequence([
       Animated.timing(scale, {
-        toValue: 0.95,
-        duration: 100,
+        toValue: 0.96,
+        duration: 80,
         useNativeDriver: true,
       }),
       Animated.timing(scale, {
         toValue: 1,
-        duration: 100,
+        duration: 80,
         useNativeDriver: true,
       }),
     ]).start();
   };
 
+  const handleHaptic = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  };
+
+  const handleLightHaptic = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
   if (isLoading || !user) {
     return (
       <View style={styles.loadingContainer}>
+        <View style={styles.loadingSpinner}>
+          <Sparkles size={32} color="#3B82F6" />
+        </View>
         <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
@@ -63,44 +92,74 @@ export default function HomePage() {
   return (
     <View style={styles.wrapper}>
       <Header />
-      <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hello, {user.name}!</Text>
-          {!user.isPremium && remaining !== null && (
-            <Text style={styles.storiesRemaining}>
-              {remaining} free {remaining === 1 ? "story" : "stories"} remaining
-            </Text>
-          )}
-        </View>
-      </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <Animated.View
-          style={{
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          }}
+          style={[
+            styles.welcomeSection,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <View style={styles.greetingContainer}>
+            <Text style={styles.greetingSmall}>Welcome back,</Text>
+            <Text style={styles.greeting}>{user.name}</Text>
+          </View>
+          
+          {!user.isPremium && remaining !== null && (
+            <View style={styles.storiesCounter}>
+              <View style={styles.counterCircle}>
+                <Text style={styles.counterNumber}>{remaining}</Text>
+              </View>
+              <Text style={styles.counterText}>
+                free {remaining === 1 ? "story" : "stories"} left
+              </Text>
+            </View>
+          )}
+        </Animated.View>
+
+        <Animated.View 
+          style={[
+            styles.createSection,
+            {
+              opacity: cardAnims[0],
+              transform: [{ 
+                translateY: cardAnims[0].interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [20, 0],
+                })
+              }],
+            },
+          ]}
         >
           <Animated.View style={{ transform: [{ scale: createButtonScale }] }}>
             <TouchableOpacity
               style={styles.createCard}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                handleHaptic();
                 animateButton(createButtonScale);
                 router.push("/create-story" as any);
               }}
-              activeOpacity={0.9}
+              activeOpacity={0.95}
             >
-            <View style={styles.createCardIcon}>
-              <Plus size={32} color="#FFFFFF" strokeWidth={3} />
-            </View>
-            <View style={styles.createCardContent}>
-              <Text style={styles.createCardTitle}>Create New Story</Text>
-              <Text style={styles.createCardSubtitle}>
-                Generate a personalized social story
-              </Text>
-            </View>
+              <View style={styles.createCardGlow} />
+              <View style={styles.createCardContent}>
+                <View style={styles.createCardIcon}>
+                  <Plus size={28} color="#FFFFFF" strokeWidth={3} />
+                </View>
+                <View style={styles.createCardText}>
+                  <Text style={styles.createCardTitle}>Create New Story</Text>
+                  <Text style={styles.createCardSubtitle}>
+                    Generate a personalized social story
+                  </Text>
+                </View>
+                <ChevronRight size={24} color="rgba(255,255,255,0.7)" />
+              </View>
             </TouchableOpacity>
           </Animated.View>
         </Animated.View>
@@ -109,48 +168,62 @@ export default function HomePage() {
           style={[
             styles.quickActions,
             {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
+              opacity: cardAnims[1],
+              transform: [{ 
+                translateY: cardAnims[1].interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [20, 0],
+                })
+              }],
             },
           ]}
         >
           <TouchableOpacity
             style={styles.actionCard}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              handleLightHaptic();
               router.push("/my-stories" as any);
             }}
             activeOpacity={0.8}
           >
-            <BookOpen size={28} color="#4A90E2" />
+            <View style={[styles.actionIconContainer, { backgroundColor: "#EFF6FF" }]}>
+              <BookOpen size={24} color="#3B82F6" />
+            </View>
             <Text style={styles.actionCardTitle}>My Stories</Text>
+            <Text style={styles.actionCardSubtitle}>View saved stories</Text>
           </TouchableOpacity>
 
           {!user.isPremium && (
             <TouchableOpacity
               style={[styles.actionCard, styles.premiumCard]}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                handleLightHaptic();
                 router.push("/pricing" as any);
               }}
               activeOpacity={0.8}
             >
-              <Crown size={28} color="#FFD700" />
+              <View style={[styles.actionIconContainer, { backgroundColor: "#FEF3C7" }]}>
+                <Crown size={24} color="#F59E0B" />
+              </View>
               <Text style={styles.actionCardTitle}>Go Premium</Text>
+              <Text style={styles.actionCardSubtitle}>Unlimited stories</Text>
             </TouchableOpacity>
           )}
 
-          {user.isAdmin && (
+          {user.isPremium && (
             <TouchableOpacity
-              style={styles.actionCard}
+              style={[styles.actionCard, styles.premiumActiveCard]}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push("/admin" as any);
+                handleLightHaptic();
+                router.push("/settings" as any);
               }}
               activeOpacity={0.8}
             >
-              <Settings size={28} color="#6C5CE7" />
-              <Text style={styles.actionCardTitle}>Admin</Text>
+              <View style={[styles.actionIconContainer, { backgroundColor: "#FEF3C7" }]}>
+                <Crown size={24} color="#F59E0B" />
+              </View>
+              <Text style={styles.actionCardTitle}>Premium Active</Text>
+              <Text style={styles.actionCardSubtitle}>Manage subscription</Text>
             </TouchableOpacity>
           )}
         </Animated.View>
@@ -159,39 +232,37 @@ export default function HomePage() {
           style={[
             styles.infoSection,
             {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
+              opacity: cardAnims[2],
+              transform: [{ 
+                translateY: cardAnims[2].interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [20, 0],
+                })
+              }],
             },
           ]}
         >
-          <Text style={styles.infoTitle}>What are Social Stories?</Text>
+          <View style={styles.infoHeader}>
+            <Sparkles size={20} color="#3B82F6" />
+            <Text style={styles.infoTitle}>What are Social Stories?</Text>
+          </View>
           <Text style={styles.infoText}>
             Social stories help individuals with autism understand social situations,
             expectations, and appropriate responses through simple, personalized narratives.
           </Text>
           <TouchableOpacity 
+            style={styles.learnMoreButton}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              handleLightHaptic();
               router.push("/about" as any);
             }} 
             activeOpacity={0.7}
           >
-            <Text style={styles.learnMoreLink}>Learn more →</Text>
+            <Text style={styles.learnMoreLink}>Learn more</Text>
+            <ChevronRight size={18} color="#3B82F6" />
           </TouchableOpacity>
         </Animated.View>
-
-        <TouchableOpacity
-          style={styles.settingsButton}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push("/settings" as any);
-          }}
-        >
-          <Settings size={20} color="#4A90E2" />
-          <Text style={styles.settingsButtonText}>Account Settings</Text>
-        </TouchableOpacity>
       </ScrollView>
-      </View>
     </View>
   );
 }
@@ -199,165 +270,221 @@ export default function HomePage() {
 const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
-    backgroundColor: "#F5F7FA",
+    backgroundColor: "#F8FAFC",
   },
-  container: {
+  scrollView: {
     flex: 1,
-    backgroundColor: "#F5F7FA",
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F8F9FD",
+    backgroundColor: "#F8FAFC",
+  },
+  loadingSpinner: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
   },
   loadingText: {
-    fontSize: 18,
-    color: "#666",
-  },
-  header: {
-    padding: 24,
-    backgroundColor: "#FFFFFF",
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  greeting: {
-    fontSize: 32,
-    fontWeight: "800" as const,
-    color: "#1A202C",
-    marginBottom: 6,
-    letterSpacing: -0.5,
-  },
-  storiesRemaining: {
     fontSize: 16,
-    color: "#718096",
+    color: "#64748B",
     fontWeight: "500" as const,
   },
-
-  content: {
-    flex: 1,
-    padding: 24,
+  welcomeSection: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
+    paddingTop: 8,
   },
-  createCard: {
+  greetingContainer: {
+    flex: 1,
+  },
+  greetingSmall: {
+    fontSize: 14,
+    color: "#64748B",
+    fontWeight: "500" as const,
+    marginBottom: 2,
+  },
+  greeting: {
+    fontSize: 28,
+    fontWeight: "800" as const,
+    color: "#0F172A",
+    letterSpacing: -0.5,
+  },
+  storiesCounter: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 24,
-    padding: 28,
-    marginBottom: 28,
-    shadowColor: "#4A90E2",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  counterCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#3B82F6",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  counterNumber: {
+    fontSize: 16,
+    fontWeight: "800" as const,
+    color: "#FFFFFF",
+  },
+  counterText: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: "#64748B",
+  },
+  createSection: {
+    marginBottom: 20,
+  },
+  createCard: {
+    backgroundColor: "#3B82F6",
+    borderRadius: 20,
+    padding: 24,
+    overflow: "hidden",
+    shadowColor: "#3B82F6",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.3,
     shadowRadius: 16,
-    elevation: 6,
+    elevation: 8,
+  },
+  createCardGlow: {
+    position: "absolute",
+    top: -50,
+    right: -50,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+  },
+  createCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   createCardIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     backgroundColor: "rgba(255, 255, 255, 0.2)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 16,
   },
-  createCardContent: {
+  createCardText: {
     flex: 1,
   },
   createCardTitle: {
-    fontSize: 22,
-    fontWeight: "800" as const,
+    fontSize: 20,
+    fontWeight: "700" as const,
     color: "#FFFFFF",
-    marginBottom: 6,
-    letterSpacing: 0.2,
+    marginBottom: 4,
   },
   createCardSubtitle: {
-    fontSize: 15,
-    color: "rgba(255, 255, 255, 0.92)",
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.85)",
     fontWeight: "500" as const,
   },
   quickActions: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 12,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   actionCard: {
     flex: 1,
-    minWidth: "45%",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 24,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  premiumCard: {
-    backgroundColor: "#FFF9E6",
-  },
-  actionCardTitle: {
-    fontSize: 17,
-    fontWeight: "700" as const,
-    color: "#1A202C",
-    marginTop: 14,
-    textAlign: "center",
-  },
-  infoSection: {
-    backgroundColor: "#F0F9FF",
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: "#BAE6FD",
-  },
-  infoTitle: {
-    fontSize: 20,
-    fontWeight: "800" as const,
-    color: "#1A202C",
-    marginBottom: 10,
-  },
-  infoText: {
-    fontSize: 15,
-    color: "#4A5568",
-    lineHeight: 22,
-    marginBottom: 14,
-    fontWeight: "400" as const,
-  },
-  learnMoreLink: {
-    fontSize: 16,
-    fontWeight: "700" as const,
-    color: "#4A90E2",
-    letterSpacing: 0.2,
-  },
-  settingsButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
-    padding: 18,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    padding: 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
-  settingsButtonText: {
+  premiumCard: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+  },
+  premiumActiveCard: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#BBF7D0",
+  },
+  actionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  actionCardTitle: {
     fontSize: 16,
+    fontWeight: "700" as const,
+    color: "#0F172A",
+    marginBottom: 4,
+  },
+  actionCardSubtitle: {
+    fontSize: 13,
+    color: "#64748B",
+    fontWeight: "500" as const,
+  },
+  infoSection: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  infoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  infoTitle: {
+    fontSize: 18,
+    fontWeight: "700" as const,
+    color: "#0F172A",
+  },
+  infoText: {
+    fontSize: 14,
+    color: "#64748B",
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  learnMoreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  learnMoreLink: {
+    fontSize: 15,
     fontWeight: "600" as const,
-    color: "#4A5568",
+    color: "#3B82F6",
   },
 });

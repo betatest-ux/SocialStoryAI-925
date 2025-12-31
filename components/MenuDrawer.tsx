@@ -1,5 +1,5 @@
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated, Dimensions, ScrollView } from "react-native";
-import { useRouter } from "expo-router";
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated, Dimensions, ScrollView, Platform } from "react-native";
+import { useRouter, usePathname } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
   Home, 
@@ -14,13 +14,14 @@ import {
   LogOut,
   User,
   X,
-  Menu
+  Plus,
+  ChevronRight
 } from "lucide-react-native";
 import React, { useRef, useEffect } from "react";
 import * as Haptics from "expo-haptics";
 
 const { width } = Dimensions.get("window");
-const DRAWER_WIDTH = Math.min(width * 0.75, 300);
+const DRAWER_WIDTH = Math.min(width * 0.82, 320);
 
 type MenuDrawerProps = {
   visible: boolean;
@@ -29,21 +30,30 @@ type MenuDrawerProps = {
 
 export function MenuDrawer({ visible, onClose }: MenuDrawerProps) {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const pathname = usePathname();
+  const { user, logout, isAuthenticated } = useAuth();
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
     if (visible) {
       Animated.parallel([
-        Animated.timing(slideAnim, {
+        Animated.spring(slideAnim, {
           toValue: 0,
-          duration: 300,
+          tension: 65,
+          friction: 11,
           useNativeDriver: true,
         }),
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 300,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 65,
+          friction: 11,
           useNativeDriver: true,
         }),
       ]).start();
@@ -51,29 +61,44 @@ export function MenuDrawer({ visible, onClose }: MenuDrawerProps) {
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: -DRAWER_WIDTH,
-          duration: 250,
+          duration: 200,
           useNativeDriver: true,
         }),
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 250,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 0.95,
+          duration: 200,
           useNativeDriver: true,
         }),
       ]).start();
     }
-  }, [visible, slideAnim, fadeAnim]);
+  }, [visible, slideAnim, fadeAnim, scaleAnim]);
 
   const handleNavigate = (path: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
     onClose();
-    setTimeout(() => router.push(path as any), 300);
+    setTimeout(() => router.push(path as any), 250);
   };
 
   const handleLogout = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
     onClose();
     await logout();
     router.replace("/");
+  };
+
+  const isActive = (path: string) => {
+    if (path === "/home" && pathname === "/home") return true;
+    if (path !== "/home" && pathname.startsWith(path)) return true;
+    return false;
   };
 
   return (
@@ -82,6 +107,7 @@ export function MenuDrawer({ visible, onClose }: MenuDrawerProps) {
       transparent
       animationType="none"
       onRequestClose={onClose}
+      statusBarTranslucent
     >
       <View style={styles.modalContainer}>
         <TouchableOpacity
@@ -96,100 +122,190 @@ export function MenuDrawer({ visible, onClose }: MenuDrawerProps) {
           style={[
             styles.drawer,
             {
-              transform: [{ translateX: slideAnim }],
+              transform: [
+                { translateX: slideAnim },
+                { scale: scaleAnim }
+              ],
             },
           ]}
         >
           <View style={styles.drawerHeader}>
-            <View style={styles.userInfo}>
-              <View style={styles.avatarContainer}>
-                <User size={24} color="#FFFFFF" />
-              </View>
-              <View style={styles.userDetails}>
-                <Text style={styles.userName}>{user?.name || "Guest"}</Text>
-                <Text style={styles.userEmail}>{user?.email || ""}</Text>
-                {user?.isPremium && (
-                  <View style={styles.premiumBadge}>
-                    <Crown size={12} color="#F59E0B" />
-                    <Text style={styles.premiumText}>Premium</Text>
-                  </View>
-                )}
-              </View>
-            </View>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <X size={24} color="#6B7280" />
+              <X size={22} color="#64748B" />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.menuItems} showsVerticalScrollIndicator={false}>
-            <MenuItem
-              icon={<Home size={22} color="#3B82F6" />}
-              label="Home"
-              onPress={() => handleNavigate("/home")}
-            />
-            <MenuItem
-              icon={<BookOpen size={22} color="#10B981" />}
-              label="My Stories"
-              onPress={() => handleNavigate("/my-stories")}
-            />
-            <MenuItem
-              icon={<Crown size={22} color="#F59E0B" />}
-              label="Pricing"
-              onPress={() => handleNavigate("/pricing")}
-            />
-            <MenuItem
-              icon={<Info size={22} color="#8B5CF6" />}
-              label="About Social Stories"
-              onPress={() => handleNavigate("/about")}
-            />
+          {isAuthenticated && user && (
+            <View style={styles.userSection}>
+              <View style={styles.avatarContainer}>
+                <Text style={styles.avatarText}>
+                  {user.name?.charAt(0).toUpperCase() || "U"}
+                </Text>
+              </View>
+              <View style={styles.userDetails}>
+                <Text style={styles.userName} numberOfLines={1}>{user.name}</Text>
+                <Text style={styles.userEmail} numberOfLines={1}>{user.email}</Text>
+              </View>
+              {user.isPremium && (
+                <View style={styles.premiumBadge}>
+                  <Crown size={14} color="#F59E0B" />
+                  <Text style={styles.premiumText}>PRO</Text>
+                </View>
+              )}
+            </View>
+          )}
 
-            <View style={styles.divider} />
-
-            <MenuItem
-              icon={<Mail size={22} color="#EC4899" />}
-              label="Contact Us"
-              onPress={() => handleNavigate("/contact")}
-            />
-            <MenuItem
-              icon={<HelpCircle size={22} color="#6366F1" />}
-              label="FAQ"
-              onPress={() => handleNavigate("/faq")}
-            />
-            <MenuItem
-              icon={<FileText size={22} color="#14B8A6" />}
-              label="Terms of Service"
-              onPress={() => handleNavigate("/terms")}
-            />
-            <MenuItem
-              icon={<Shield size={22} color="#06B6D4" />}
-              label="Privacy Policy"
-              onPress={() => handleNavigate("/privacy")}
-            />
-
-            {user?.isAdmin && (
+          <ScrollView 
+            style={styles.menuItems} 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.menuContent}
+          >
+            {isAuthenticated ? (
               <>
-                <View style={styles.divider} />
-                <MenuItem
-                  icon={<Settings size={22} color="#EF4444" />}
-                  label="Admin Dashboard"
-                  onPress={() => handleNavigate("/admin")}
-                />
+                <View style={styles.menuSection}>
+                  <Text style={styles.sectionLabel}>MAIN</Text>
+                  <MenuItem
+                    icon={<Home size={20} color={isActive("/home") ? "#3B82F6" : "#64748B"} />}
+                    label="Home"
+                    active={isActive("/home")}
+                    onPress={() => handleNavigate("/home")}
+                  />
+                  <MenuItem
+                    icon={<Plus size={20} color={isActive("/create-story") ? "#3B82F6" : "#64748B"} />}
+                    label="Create Story"
+                    active={isActive("/create-story")}
+                    onPress={() => handleNavigate("/create-story")}
+                  />
+                  <MenuItem
+                    icon={<BookOpen size={20} color={isActive("/my-stories") ? "#3B82F6" : "#64748B"} />}
+                    label="My Stories"
+                    active={isActive("/my-stories")}
+                    onPress={() => handleNavigate("/my-stories")}
+                  />
+                </View>
+
+                <View style={styles.menuSection}>
+                  <Text style={styles.sectionLabel}>ACCOUNT</Text>
+                  {!user?.isPremium && (
+                    <MenuItem
+                      icon={<Crown size={20} color="#F59E0B" />}
+                      label="Upgrade to Premium"
+                      onPress={() => handleNavigate("/pricing")}
+                      highlight
+                    />
+                  )}
+                  <MenuItem
+                    icon={<Settings size={20} color={isActive("/settings") ? "#3B82F6" : "#64748B"} />}
+                    label="Settings"
+                    active={isActive("/settings")}
+                    onPress={() => handleNavigate("/settings")}
+                  />
+                </View>
+
+                <View style={styles.menuSection}>
+                  <Text style={styles.sectionLabel}>INFO</Text>
+                  <MenuItem
+                    icon={<Info size={20} color={isActive("/about") ? "#3B82F6" : "#64748B"} />}
+                    label="About Social Stories"
+                    active={isActive("/about")}
+                    onPress={() => handleNavigate("/about")}
+                  />
+                  <MenuItem
+                    icon={<Mail size={20} color={isActive("/contact") ? "#3B82F6" : "#64748B"} />}
+                    label="Contact Us"
+                    active={isActive("/contact")}
+                    onPress={() => handleNavigate("/contact")}
+                  />
+                  <MenuItem
+                    icon={<HelpCircle size={20} color={isActive("/faq") ? "#3B82F6" : "#64748B"} />}
+                    label="FAQ"
+                    active={isActive("/faq")}
+                    onPress={() => handleNavigate("/faq")}
+                  />
+                </View>
+
+                <View style={styles.menuSection}>
+                  <Text style={styles.sectionLabel}>LEGAL</Text>
+                  <MenuItem
+                    icon={<FileText size={20} color={isActive("/terms") ? "#3B82F6" : "#64748B"} />}
+                    label="Terms of Service"
+                    active={isActive("/terms")}
+                    onPress={() => handleNavigate("/terms")}
+                  />
+                  <MenuItem
+                    icon={<Shield size={20} color={isActive("/privacy") ? "#3B82F6" : "#64748B"} />}
+                    label="Privacy Policy"
+                    active={isActive("/privacy")}
+                    onPress={() => handleNavigate("/privacy")}
+                  />
+                </View>
+
+                {user?.isAdmin && (
+                  <View style={styles.menuSection}>
+                    <Text style={styles.sectionLabel}>ADMIN</Text>
+                    <MenuItem
+                      icon={<Shield size={20} color="#EF4444" />}
+                      label="Admin Dashboard"
+                      active={isActive("/admin")}
+                      onPress={() => handleNavigate("/admin")}
+                      admin
+                    />
+                  </View>
+                )}
+
+                <View style={styles.logoutSection}>
+                  <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                    <LogOut size={20} color="#EF4444" />
+                    <Text style={styles.logoutText}>Sign Out</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.menuSection}>
+                  <MenuItem
+                    icon={<Home size={20} color={isActive("/") ? "#3B82F6" : "#64748B"} />}
+                    label="Home"
+                    active={pathname === "/"}
+                    onPress={() => handleNavigate("/")}
+                  />
+                  <MenuItem
+                    icon={<Info size={20} color={isActive("/about") ? "#3B82F6" : "#64748B"} />}
+                    label="About"
+                    active={isActive("/about")}
+                    onPress={() => handleNavigate("/about")}
+                  />
+                  <MenuItem
+                    icon={<Crown size={20} color={isActive("/pricing") ? "#3B82F6" : "#64748B"} />}
+                    label="Pricing"
+                    active={isActive("/pricing")}
+                    onPress={() => handleNavigate("/pricing")}
+                  />
+                  <MenuItem
+                    icon={<HelpCircle size={20} color={isActive("/faq") ? "#3B82F6" : "#64748B"} />}
+                    label="FAQ"
+                    active={isActive("/faq")}
+                    onPress={() => handleNavigate("/faq")}
+                  />
+                </View>
+
+                <View style={styles.authSection}>
+                  <TouchableOpacity 
+                    style={styles.signInButton}
+                    onPress={() => handleNavigate("/auth")}
+                  >
+                    <User size={20} color="#FFFFFF" />
+                    <Text style={styles.signInText}>Sign In</Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
-
-            <View style={styles.divider} />
-
-            <MenuItem
-              icon={<Settings size={22} color="#6B7280" />}
-              label="Settings"
-              onPress={() => handleNavigate("/settings")}
-            />
-            <MenuItem
-              icon={<LogOut size={22} color="#EF4444" />}
-              label="Logout"
-              onPress={handleLogout}
-            />
           </ScrollView>
+
+          <View style={styles.drawerFooter}>
+            <Text style={styles.footerText}>SocialStoryAI</Text>
+            <Text style={styles.versionText}>v1.0.0</Text>
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -200,27 +316,36 @@ type MenuItemProps = {
   icon: React.ReactNode;
   label: string;
   onPress: () => void;
+  active?: boolean;
+  highlight?: boolean;
+  admin?: boolean;
 };
 
-function MenuItem({ icon, label, onPress }: MenuItemProps) {
+function MenuItem({ icon, label, onPress, active, highlight, admin }: MenuItemProps) {
   return (
-    <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.menuItemIcon}>{icon}</View>
-      <Text style={styles.menuItemLabel}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
-export function MenuButton({ onPress }: { onPress: () => void }) {
-  return (
-    <TouchableOpacity
-      style={styles.menuButton}
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        onPress();
-      }}
+    <TouchableOpacity 
+      style={[
+        styles.menuItem, 
+        active && styles.menuItemActive,
+        highlight && styles.menuItemHighlight,
+        admin && styles.menuItemAdmin,
+      ]} 
+      onPress={onPress} 
+      activeOpacity={0.7}
     >
-      <Menu size={24} color="#111827" />
+      <View style={styles.menuItemLeft}>
+        <View style={[styles.menuItemIcon, active && styles.menuItemIconActive]}>
+          {icon}
+        </View>
+        <Text style={[
+          styles.menuItemLabel, 
+          active && styles.menuItemLabelActive,
+          highlight && styles.menuItemLabelHighlight,
+        ]}>
+          {label}
+        </Text>
+      </View>
+      <ChevronRight size={18} color={active ? "#3B82F6" : "#CBD5E1"} />
     </TouchableOpacity>
   );
 }
@@ -234,7 +359,7 @@ const styles = StyleSheet.create({
   },
   overlayBg: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
   },
   drawer: {
     position: "absolute",
@@ -244,26 +369,38 @@ const styles = StyleSheet.create({
     width: DRAWER_WIDTH,
     backgroundColor: "#FFFFFF",
     shadowColor: "#000",
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+    borderTopRightRadius: 24,
+    borderBottomRightRadius: 24,
   },
   drawerHeader: {
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: "#F9FAFB",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    paddingTop: Platform.OS === 'ios' ? 54 : 40,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
-  userInfo: {
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  userSection: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
   },
   avatarContainer: {
     width: 48,
@@ -272,65 +409,164 @@ const styles = StyleSheet.create({
     backgroundColor: "#3B82F6",
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 12,
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: "700" as const,
+    color: "#FFFFFF",
   },
   userDetails: {
     flex: 1,
+    marginRight: 8,
   },
   userName: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
+    fontWeight: "700" as const,
+    color: "#0F172A",
     marginBottom: 2,
   },
   userEmail: {
     fontSize: 13,
-    color: "#6B7280",
-    marginBottom: 4,
+    color: "#64748B",
   },
   premiumBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     backgroundColor: "#FEF3C7",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
   },
   premiumText: {
     fontSize: 11,
-    fontWeight: "600",
-    color: "#F59E0B",
-  },
-  closeButton: {
-    padding: 4,
+    fontWeight: "800" as const,
+    color: "#D97706",
+    letterSpacing: 0.5,
   },
   menuItems: {
     flex: 1,
-    padding: 8,
+  },
+  menuContent: {
+    paddingHorizontal: 12,
+    paddingBottom: 20,
+  },
+  menuSection: {
+    marginBottom: 16,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "700" as const,
+    color: "#94A3B8",
+    letterSpacing: 1,
+    marginLeft: 16,
+    marginBottom: 8,
+    marginTop: 8,
   },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
-    borderRadius: 8,
-    marginBottom: 4,
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 2,
+  },
+  menuItemActive: {
+    backgroundColor: "#EFF6FF",
+  },
+  menuItemHighlight: {
+    backgroundColor: "#FFFBEB",
+  },
+  menuItemAdmin: {
+    backgroundColor: "#FEF2F2",
+  },
+  menuItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
   },
   menuItemIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
+  menuItemIconActive: {
+    backgroundColor: "#DBEAFE",
+  },
   menuItemLabel: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: "#334155",
+  },
+  menuItemLabelActive: {
+    color: "#3B82F6",
+  },
+  menuItemLabelHighlight: {
+    color: "#D97706",
+  },
+  logoutSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+  },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginHorizontal: 4,
+    borderRadius: 12,
+    backgroundColor: "#FEF2F2",
+  },
+  logoutText: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: "#EF4444",
+  },
+  authSection: {
+    marginTop: 24,
+    paddingHorizontal: 4,
+  },
+  signInButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: "#3B82F6",
+  },
+  signInText: {
     fontSize: 16,
-    color: "#111827",
-    fontWeight: "500",
+    fontWeight: "600" as const,
+    color: "#FFFFFF",
   },
-  divider: {
-    height: 1,
-    backgroundColor: "#E5E7EB",
-    marginVertical: 8,
-    marginHorizontal: 12,
+  drawerFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
   },
-  menuButton: {
-    padding: 8,
+  footerText: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: "#94A3B8",
+  },
+  versionText: {
+    fontSize: 12,
+    color: "#CBD5E1",
   },
 });
