@@ -167,49 +167,82 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const loginWithGoogle = async () => {
     try {
+      console.log('Starting Google OAuth login...');
+      console.log('Platform:', Platform.OS);
+
       const redirectUrl = makeRedirectUri({
-        path: '/auth/callback',
+        scheme: 'exp',
+        path: 'auth/callback',
       });
 
       console.log('Google login redirect URL:', redirectUrl);
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: Platform.OS !== 'web',
-        },
-      });
+      if (Platform.OS === 'web') {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin,
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
+          },
+        });
 
-      if (error) {
-        console.error('Google login error:', error);
-        throw new Error(error.message);
-      }
+        if (error) {
+          console.error('Google OAuth error:', error);
+          if (error.message.includes('oauth')) {
+            throw new Error('Google login is not configured. Please contact support.');
+          }
+          throw new Error(error.message);
+        }
 
-      if (Platform.OS !== 'web' && data.url) {
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUrl
-        );
+        console.log('Google OAuth initiated successfully');
+        return data;
+      } else {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: redirectUrl,
+            skipBrowserRedirect: true,
+          },
+        });
 
-        if (result.type === 'success') {
-          const { url } = result;
-          const params = new URLSearchParams(url.split('#')[1]);
-          const accessToken = params.get('access_token');
-          const refreshToken = params.get('refresh_token');
+        if (error) {
+          console.error('Google OAuth error:', error);
+          throw new Error(error.message);
+        }
 
-          if (accessToken && refreshToken) {
-            await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
+        if (data.url) {
+          const result = await WebBrowser.openAuthSessionAsync(
+            data.url,
+            redirectUrl
+          );
+
+          if (result.type === 'success') {
+            const { url } = result;
+            const params = new URLSearchParams(url.split('#')[1] || url.split('?')[1]);
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+
+            if (accessToken && refreshToken) {
+              await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+            }
+          } else {
+            throw new Error('Google login was cancelled or failed');
           }
         }
-      }
 
-      return data;
-    } catch (error) {
+        return data;
+      }
+    } catch (error: any) {
       console.error('Google login failed:', error);
+      if (error.message.includes('not configured') || error.message.includes('Provider not found')) {
+        throw new Error('Google login is not available. Please use email/password login.');
+      }
       throw error;
     }
   };

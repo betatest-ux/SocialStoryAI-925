@@ -23,23 +23,43 @@ export default function AuthScreen() {
   const { login, register, loginWithGoogle, isLoggingIn, isRegistering, loginError, registerError } = useAuth();
 
   const handleSubmit = async () => {
+    if (!email || !password) {
+      Alert.alert("Error", "Please enter both email and password");
+      return;
+    }
+
+    if (!isLogin && !name) {
+      Alert.alert("Error", "Please enter your name");
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert("Error", "Password must be at least 6 characters long");
+      return;
+    }
+
     try {
       console.log('Starting authentication:', isLogin ? 'login' : 'register', email);
       if (isLogin) {
         const result = await login({ email, password });
         console.log('Login successful:', result);
       } else {
-        if (!name) {
-          Alert.alert("Error", "Please enter your name");
-          return;
-        }
         const result = await register({ email, password, name });
         console.log('Register successful:', result);
       }
       router.replace("/home");
     } catch (error: any) {
       console.error('Auth error:', error);
-      Alert.alert("Error", error.message || "Authentication failed");
+      const errorMessage = error.message || "Authentication failed";
+      if (errorMessage.includes('Invalid login credentials')) {
+        Alert.alert("Login Failed", "Invalid email or password. Please try again.");
+      } else if (errorMessage.includes('User already registered')) {
+        Alert.alert("Registration Failed", "This email is already registered. Please sign in instead.");
+      } else if (errorMessage.includes('Email not confirmed')) {
+        Alert.alert("Email Not Confirmed", "Please check your email to confirm your account.");
+      } else {
+        Alert.alert("Error", errorMessage);
+      }
     }
   };
 
@@ -47,10 +67,21 @@ export default function AuthScreen() {
     try {
       console.log('Starting Google login');
       await loginWithGoogle();
+      console.log('Google login completed, redirecting to home');
       router.replace("/home");
     } catch (error: any) {
       console.error('Google login error:', error);
-      Alert.alert("Error", error.message || "Google login failed");
+      const errorMessage = error.message || "Google login failed";
+      if (errorMessage.includes('not configured') || errorMessage.includes('not available')) {
+        Alert.alert(
+          "Google Login Unavailable", 
+          "Google login is currently not configured. Please use email and password to sign in."
+        );
+      } else if (errorMessage.includes('cancelled')) {
+        console.log('User cancelled Google login');
+      } else {
+        Alert.alert("Google Login Failed", errorMessage);
+      }
     }
   };
 

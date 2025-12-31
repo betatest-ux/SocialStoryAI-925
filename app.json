@@ -22,7 +22,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.rork.socialstoryai",
+      "package": "app.socialstoryai",
       "permissions": [
         "android.permission.VIBRATE"
       ]
