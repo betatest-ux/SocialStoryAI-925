@@ -1,4 +1,4 @@
-import { getDatabase } from './connection';
+import { supabaseAdmin } from './connection';
 
 export type ContactRequest = {
   id: string;
@@ -13,101 +13,121 @@ export type ContactRequest = {
   userId?: string;
 };
 
-function rowToContactRequest(row: any): ContactRequest {
-  return {
-    id: row.id,
-    name: row.name,
-    email: row.email,
-    subject: row.subject,
-    message: row.message,
-    status: row.status as 'pending' | 'in-progress' | 'resolved',
-    createdAt: row.created_at,
-    repliedAt: row.replied_at,
-    adminReply: row.admin_reply,
-    userId: row.user_id,
-  };
-}
-
-export function createContactRequest(input: {
+export async function createContactRequest(input: {
   name: string;
   email: string;
   subject: string;
   message: string;
   userId?: string;
-}): ContactRequest {
-  const db = getDatabase();
-  
-  const requestId = `contact_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const createdAt = new Date().toISOString();
-  
-  const stmt = db.prepare(`
-    INSERT INTO contact_requests (id, name, email, subject, message, status, created_at, user_id)
-    VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
-  `);
-  
-  stmt.run(requestId, input.name, input.email, input.subject, input.message, createdAt, input.userId || null);
-  
-  const request = getContactRequest(requestId);
-  if (!request) {
-    throw new Error('Failed to create contact request');
+}): Promise<ContactRequest> {
+  const { data, error } = await supabaseAdmin
+    .from('contact_requests')
+    .insert([{
+      name: input.name,
+      email: input.email,
+      subject: input.subject,
+      message: input.message,
+      status: 'pending' as const,
+      user_id: input.userId || null,
+    }] as any)
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || 'Failed to create contact request');
   }
-  
-  return request;
+
+  return {
+    id: (data as any).id,
+    name: (data as any).name,
+    email: (data as any).email,
+    subject: (data as any).subject,
+    message: (data as any).message,
+    status: (data as any).status,
+    createdAt: (data as any).created_at,
+    repliedAt: (data as any).replied_at || undefined,
+    adminReply: (data as any).admin_reply || undefined,
+    userId: (data as any).user_id || undefined,
+  };
 }
 
-export function getAllContactRequests(): ContactRequest[] {
-  const db = getDatabase();
-  
-  const stmt = db.prepare('SELECT * FROM contact_requests ORDER BY created_at DESC');
-  const rows = stmt.all();
-  
-  return rows.map(rowToContactRequest);
+export async function getAllContactRequests(): Promise<ContactRequest[]> {
+  const { data, error } = await supabaseAdmin
+    .from('contact_requests')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    subject: row.subject,
+    message: row.message,
+    status: row.status,
+    createdAt: row.created_at,
+    repliedAt: row.replied_at || undefined,
+    adminReply: row.admin_reply || undefined,
+    userId: row.user_id || undefined,
+  }));
 }
 
-export function getContactRequest(id: string): ContactRequest | undefined {
-  const db = getDatabase();
-  
-  const stmt = db.prepare('SELECT * FROM contact_requests WHERE id = ? LIMIT 1');
-  const row = stmt.get(id);
-  
-  return row ? rowToContactRequest(row) : undefined;
+export async function getContactRequest(id: string): Promise<ContactRequest | undefined> {
+  const { data, error } = await supabaseAdmin
+    .from('contact_requests')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error || !data) {
+    return undefined;
+  }
+
+  return {
+    id: (data as any).id,
+    name: (data as any).name,
+    email: (data as any).email,
+    subject: (data as any).subject,
+    message: (data as any).message,
+    status: (data as any).status,
+    createdAt: (data as any).created_at,
+    repliedAt: (data as any).replied_at || undefined,
+    adminReply: (data as any).admin_reply || undefined,
+    userId: (data as any).user_id || undefined,
+  };
 }
 
-export function updateContactRequest(id: string, updates: Partial<ContactRequest>): void {
-  const db = getDatabase();
-  
-  const fields: string[] = [];
-  const values: any[] = [];
-  
-  if (updates.status !== undefined) {
-    fields.push('status = ?');
-    values.push(updates.status);
-  }
-  if (updates.repliedAt !== undefined) {
-    fields.push('replied_at = ?');
-    values.push(updates.repliedAt);
-  }
-  if (updates.adminReply !== undefined) {
-    fields.push('admin_reply = ?');
-    values.push(updates.adminReply);
-  }
-  
-  if (fields.length === 0) {
+export async function updateContactRequest(id: string, updates: Partial<ContactRequest>): Promise<void> {
+  const dbUpdates: Record<string, any> = {};
+
+  if (updates.status !== undefined) dbUpdates.status = updates.status;
+  if (updates.repliedAt !== undefined) dbUpdates.replied_at = updates.repliedAt;
+  if (updates.adminReply !== undefined) dbUpdates.admin_reply = updates.adminReply;
+
+  if (Object.keys(dbUpdates).length === 0) {
     return;
   }
-  
-  values.push(id);
-  
-  const stmt = db.prepare(`
-    UPDATE contact_requests SET ${fields.join(', ')} WHERE id = ?
-  `);
-  
-  stmt.run(...values);
+
+  const { error } = await supabaseAdmin
+    .from('contact_requests')
+    .update(dbUpdates as any)
+    .eq('id', id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
-export function deleteContactRequest(id: string): void {
-  const db = getDatabase();
-  
-  const stmt = db.prepare('DELETE FROM contact_requests WHERE id = ?');
-  stmt.run(id);
+export async function deleteContactRequest(id: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('contact_requests')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }

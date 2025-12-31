@@ -1,4 +1,5 @@
-import { getDatabase } from './connection';
+import { supabaseAdmin } from './connection';
+import type { Database } from '@/lib/supabase';
 
 export type ApiKeys = {
   id: string;
@@ -35,175 +36,169 @@ export type ActivityLog = {
   details: string;
 };
 
-function rowToApiKeys(row: any): ApiKeys {
-  return {
-    id: row.id,
-    openaiKey: row.openai_key,
-    geminiKey: row.gemini_key,
-    stripeSecretKey: row.stripe_secret_key,
-    stripePublishableKey: row.stripe_publishable_key,
-    googleOAuthWebClientId: row.google_oauth_web_client_id,
-    googleOAuthIosClientId: row.google_oauth_ios_client_id,
-    googleOAuthAndroidClientId: row.google_oauth_android_client_id,
-    mailHost: row.mail_host,
-    mailPort: row.mail_port,
-    mailUser: row.mail_user,
-    mailPassword: row.mail_password,
-    mailFrom: row.mail_from,
-    jwtSecret: row.jwt_secret,
-    updatedAt: row.updated_at,
-  };
-}
+export async function getApiKeys(): Promise<ApiKeys> {
+  const { data } = await supabaseAdmin
+    .from('api_keys')
+    .select('*')
+    .eq('id', 'default')
+    .maybeSingle() as { data: any };
 
-function rowToAdminSettings(row: any): AdminSettings {
-  return {
-    id: row.id,
-    freeStoryLimit: row.free_story_limit,
-    enableRegistration: Boolean(row.enable_registration),
-    maintenanceMode: Boolean(row.maintenance_mode),
-    premiumPrice: row.premium_price,
-    updatedAt: row.updated_at,
-  };
-}
-
-function rowToActivityLog(row: any): ActivityLog {
-  return {
-    id: row.id,
-    timestamp: row.timestamp,
-    action: row.action,
-    userId: row.user_id,
-    details: row.details,
-  };
-}
-
-export function getApiKeys(): ApiKeys {
-  const db = getDatabase();
-  const stmt = db.prepare("SELECT * FROM api_keys WHERE id = 'default' LIMIT 1");
-  const row = stmt.get();
-  
-  if (!row) {
+  if (!data) {
     const now = new Date().toISOString();
-    const insertStmt = db.prepare(`
-      INSERT INTO api_keys (id, updated_at) VALUES ('default', ?)
-    `);
-    insertStmt.run(now);
-    
+    const { data: newData, error: insertError } = await supabaseAdmin
+      .from('api_keys')
+      .insert([{ id: 'default' }] as any)
+      .select()
+      .single();
+
+    if (insertError || !newData) {
+      throw new Error('Failed to create default API keys');
+    }
+
     return {
       id: 'default',
       updatedAt: now,
     };
   }
-  
-  return rowToApiKeys(row);
+
+  return {
+    id: data.id as string,
+    openaiKey: (data.openai_key as string | null) || undefined,
+    geminiKey: (data.gemini_key as string | null) || undefined,
+    stripeSecretKey: (data.stripe_secret_key as string | null) || undefined,
+    stripePublishableKey: (data.stripe_publishable_key as string | null) || undefined,
+    googleOAuthWebClientId: (data.google_oauth_web_client_id as string | null) || undefined,
+    googleOAuthIosClientId: (data.google_oauth_ios_client_id as string | null) || undefined,
+    googleOAuthAndroidClientId: (data.google_oauth_android_client_id as string | null) || undefined,
+    mailHost: (data.mail_host as string | null) || undefined,
+    mailPort: (data.mail_port as number | null) || undefined,
+    mailUser: (data.mail_user as string | null) || undefined,
+    mailPassword: (data.mail_password as string | null) || undefined,
+    mailFrom: (data.mail_from as string | null) || undefined,
+    jwtSecret: (data.jwt_secret as string | null) || undefined,
+    updatedAt: data.updated_at as string,
+  };
 }
 
-export function updateApiKeys(updates: Partial<ApiKeys>): void {
-  const db = getDatabase();
-  const fields: string[] = [];
-  const values: any[] = [];
-  
-  const fieldMap: Record<string, string> = {
-    openaiKey: 'openai_key',
-    geminiKey: 'gemini_key',
-    stripeSecretKey: 'stripe_secret_key',
-    stripePublishableKey: 'stripe_publishable_key',
-    googleOAuthWebClientId: 'google_oauth_web_client_id',
-    googleOAuthIosClientId: 'google_oauth_ios_client_id',
-    googleOAuthAndroidClientId: 'google_oauth_android_client_id',
-    mailHost: 'mail_host',
-    mailPort: 'mail_port',
-    mailUser: 'mail_user',
-    mailPassword: 'mail_password',
-    mailFrom: 'mail_from',
-    jwtSecret: 'jwt_secret',
-  };
-  
-  for (const [key, dbField] of Object.entries(fieldMap)) {
-    if (updates[key as keyof ApiKeys] !== undefined) {
-      fields.push(`${dbField} = ?`);
-      values.push(updates[key as keyof ApiKeys]);
+export async function updateApiKeys(updates: Partial<ApiKeys>): Promise<void> {
+  const dbUpdates: Record<string, any> = {};
+
+  if (updates.openaiKey !== undefined) dbUpdates.openai_key = updates.openaiKey;
+  if (updates.geminiKey !== undefined) dbUpdates.gemini_key = updates.geminiKey;
+  if (updates.stripeSecretKey !== undefined) dbUpdates.stripe_secret_key = updates.stripeSecretKey;
+  if (updates.stripePublishableKey !== undefined) dbUpdates.stripe_publishable_key = updates.stripePublishableKey;
+  if (updates.googleOAuthWebClientId !== undefined) dbUpdates.google_oauth_web_client_id = updates.googleOAuthWebClientId;
+  if (updates.googleOAuthIosClientId !== undefined) dbUpdates.google_oauth_ios_client_id = updates.googleOAuthIosClientId;
+  if (updates.googleOAuthAndroidClientId !== undefined) dbUpdates.google_oauth_android_client_id = updates.googleOAuthAndroidClientId;
+  if (updates.mailHost !== undefined) dbUpdates.mail_host = updates.mailHost;
+  if (updates.mailPort !== undefined) dbUpdates.mail_port = updates.mailPort;
+  if (updates.mailUser !== undefined) dbUpdates.mail_user = updates.mailUser;
+  if (updates.mailPassword !== undefined) dbUpdates.mail_password = updates.mailPassword;
+  if (updates.mailFrom !== undefined) dbUpdates.mail_from = updates.mailFrom;
+  if (updates.jwtSecret !== undefined) dbUpdates.jwt_secret = updates.jwtSecret;
+
+  if (Object.keys(dbUpdates).length > 0) {
+    const { error } = await supabaseAdmin
+      .from('api_keys')
+      .update(dbUpdates as any)
+      .eq('id', 'default');
+
+    if (error) {
+      throw new Error(error.message);
     }
   }
-  
-  if (fields.length > 0) {
-    fields.push('updated_at = ?');
-    values.push(new Date().toISOString());
-    
-    const stmt = db.prepare(`UPDATE api_keys SET ${fields.join(', ')} WHERE id = 'default'`);
-    stmt.run(...values);
-  }
 }
 
-export function getAdminSettings(): AdminSettings {
-  const db = getDatabase();
-  const stmt = db.prepare("SELECT * FROM admin_settings WHERE id = 'default' LIMIT 1");
-  const row = stmt.get();
-  
-  if (!row) {
+export async function getAdminSettings(): Promise<AdminSettings> {
+  const { data, error } = await supabaseAdmin
+    .from('admin_settings')
+    .select('*')
+    .eq('id', 'default')
+    .single<Database['public']['Tables']['admin_settings']['Row']>();
+
+  if (error || !data) {
     throw new Error('Admin settings not found');
   }
-  
-  return rowToAdminSettings(row);
+
+  return {
+    id: data.id,
+    freeStoryLimit: data.free_story_limit,
+    enableRegistration: data.enable_registration,
+    maintenanceMode: data.maintenance_mode,
+    premiumPrice: Number(data.premium_price),
+    updatedAt: data.updated_at,
+  };
 }
 
-export function updateAdminSettings(updates: Partial<AdminSettings>): void {
-  const db = getDatabase();
-  const fields: string[] = [];
-  const values: any[] = [];
-  
-  if (updates.freeStoryLimit !== undefined) {
-    fields.push('free_story_limit = ?');
-    values.push(updates.freeStoryLimit);
-  }
-  if (updates.enableRegistration !== undefined) {
-    fields.push('enable_registration = ?');
-    values.push(updates.enableRegistration ? 1 : 0);
-  }
-  if (updates.maintenanceMode !== undefined) {
-    fields.push('maintenance_mode = ?');
-    values.push(updates.maintenanceMode ? 1 : 0);
-  }
-  if (updates.premiumPrice !== undefined) {
-    fields.push('premium_price = ?');
-    values.push(updates.premiumPrice);
-  }
-  
-  if (fields.length > 0) {
-    fields.push('updated_at = ?');
-    values.push(new Date().toISOString());
-    
-    const stmt = db.prepare(`UPDATE admin_settings SET ${fields.join(', ')} WHERE id = 'default'`);
-    stmt.run(...values);
+export async function updateAdminSettings(updates: Partial<AdminSettings>): Promise<void> {
+  const dbUpdates: Record<string, any> = {};
+
+  if (updates.freeStoryLimit !== undefined) dbUpdates.free_story_limit = updates.freeStoryLimit;
+  if (updates.enableRegistration !== undefined) dbUpdates.enable_registration = updates.enableRegistration;
+  if (updates.maintenanceMode !== undefined) dbUpdates.maintenance_mode = updates.maintenanceMode;
+  if (updates.premiumPrice !== undefined) dbUpdates.premium_price = updates.premiumPrice;
+
+  if (Object.keys(dbUpdates).length > 0) {
+    const { error } = await supabaseAdmin
+      .from('admin_settings')
+      .update(dbUpdates as any)
+      .eq('id', 'default');
+
+    if (error) {
+      throw new Error(error.message);
+    }
   }
 }
 
-export function addActivityLog(action: string, userId: string, details: string): void {
-  const db = getDatabase();
-  const logId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  const stmt = db.prepare(`
-    INSERT INTO activity_logs (id, timestamp, action, user_id, details)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-  
-  stmt.run(logId, Date.now(), action, userId, details);
-  
-  const countStmt = db.prepare('SELECT COUNT(*) as count FROM activity_logs');
-  const result = countStmt.get() as { count: number };
-  
-  if (result.count > 100) {
-    const deleteStmt = db.prepare(`
-      DELETE FROM activity_logs WHERE id IN (
-        SELECT id FROM activity_logs ORDER BY timestamp ASC LIMIT ?
-      )
-    `);
-    deleteStmt.run(result.count - 100);
+export async function addActivityLog(action: string, userId: string, details: string): Promise<void> {
+  await supabaseAdmin
+    .from('activity_logs')
+    .insert([{
+      timestamp: Date.now(),
+      action,
+      user_id: userId,
+      details,
+    }] as any);
+
+  const { data: countData } = await supabaseAdmin
+    .from('activity_logs')
+    .select('id', { count: 'exact', head: true });
+
+  const count = countData?.length || 0;
+
+  if (count > 100) {
+    const { data: oldLogs } = await supabaseAdmin
+      .from('activity_logs')
+      .select('id')
+      .order('timestamp', { ascending: true })
+      .limit(count - 100);
+
+    if (oldLogs && oldLogs.length > 0) {
+      const idsToDelete = oldLogs.map((log: any) => log.id);
+      await supabaseAdmin
+        .from('activity_logs')
+        .delete()
+        .in('id', idsToDelete);
+    }
   }
 }
 
-export function getActivityLogs(): ActivityLog[] {
-  const db = getDatabase();
-  const stmt = db.prepare('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 100');
-  const rows = stmt.all();
-  return rows.map(rowToActivityLog);
+export async function getActivityLogs(): Promise<ActivityLog[]> {
+  const { data, error } = await supabaseAdmin
+    .from('activity_logs')
+    .select('*')
+    .order('timestamp', { ascending: false })
+    .limit(100);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    timestamp: row.timestamp,
+    action: row.action,
+    userId: row.user_id,
+    details: row.details,
+  }));
 }

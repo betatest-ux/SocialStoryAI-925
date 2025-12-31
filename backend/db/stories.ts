@@ -1,4 +1,5 @@
-import { getDatabase } from './connection';
+import { supabaseAdmin } from './connection';
+import type { Database } from '@/lib/supabase';
 
 export type Story = {
   id: string;
@@ -15,8 +16,82 @@ export type Story = {
   updatedAt: string;
 };
 
-function rowToStory(row: any): Story {
+export async function createStory(input: Omit<Story, 'id' | 'createdAt' | 'updatedAt'>): Promise<Story> {
+  const { data, error } = await supabaseAdmin
+    .from('stories')
+    .insert([{
+      user_id: input.userId,
+      child_name: input.childName,
+      situation: input.situation,
+      complexity: input.complexity,
+      tone: input.tone,
+      image_style: input.imageStyle,
+      content: input.content,
+      images: input.images as any,
+      video_url: input.videoUrl || null,
+    }] as any)
+    .select()
+    .single() as { data: any; error: any };
+
+  if (error || !data) {
+    throw new Error(error?.message || 'Failed to create story');
+  }
+
   return {
+    id: data.id,
+    userId: data.user_id,
+    childName: data.child_name,
+    situation: data.situation,
+    complexity: data.complexity,
+    tone: data.tone,
+    imageStyle: data.image_style,
+    content: data.content,
+    images: data.images as string[],
+    videoUrl: data.video_url || undefined,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}
+
+export async function getStory(id: string): Promise<Story | undefined> {
+  const { data, error } = await supabaseAdmin
+    .from('stories')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error || !data) {
+    return undefined;
+  }
+
+  return {
+    id: data.id,
+    userId: data.user_id,
+    childName: data.child_name,
+    situation: data.situation,
+    complexity: data.complexity,
+    tone: data.tone,
+    imageStyle: data.image_style,
+    content: data.content,
+    images: data.images as string[],
+    videoUrl: data.video_url || undefined,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}
+
+export async function getUserStories(userId: string): Promise<Story[]> {
+  const { data, error } = await supabaseAdmin
+    .from('stories')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((row) => ({
     id: row.id,
     userId: row.user_id,
     childName: row.child_name,
@@ -25,133 +100,72 @@ function rowToStory(row: any): Story {
     tone: row.tone,
     imageStyle: row.image_style,
     content: row.content,
-    images: JSON.parse(row.images),
-    videoUrl: row.video_url,
+    images: row.images as string[],
+    videoUrl: row.video_url || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
+  }));
 }
 
-export function createStory(input: Omit<Story, 'id' | 'createdAt' | 'updatedAt'>): Story {
-  const db = getDatabase();
-  
-  const storyId = `story_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const now = new Date().toISOString();
-  
-  const stmt = db.prepare(`
-    INSERT INTO stories (id, user_id, child_name, situation, complexity, tone, image_style, content, images, video_url, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  
-  stmt.run(
-    storyId,
-    input.userId,
-    input.childName,
-    input.situation,
-    input.complexity,
-    input.tone,
-    input.imageStyle,
-    input.content,
-    JSON.stringify(input.images),
-    input.videoUrl || null,
-    now,
-    now
-  );
-  
-  const story = getStory(storyId);
-  if (!story) {
-    throw new Error('Failed to create story');
-  }
-  
-  return story;
-}
+export async function updateStory(id: string, updates: Partial<Story>): Promise<void> {
+  const dbUpdates: Database['public']['Tables']['stories']['Update'] = {};
 
-export function getStory(id: string): Story | undefined {
-  const db = getDatabase();
-  
-  const stmt = db.prepare('SELECT * FROM stories WHERE id = ? LIMIT 1');
-  const row = stmt.get(id);
-  
-  return row ? rowToStory(row) : undefined;
-}
+  if (updates.childName !== undefined) dbUpdates.child_name = updates.childName;
+  if (updates.situation !== undefined) dbUpdates.situation = updates.situation;
+  if (updates.complexity !== undefined) dbUpdates.complexity = updates.complexity;
+  if (updates.tone !== undefined) dbUpdates.tone = updates.tone;
+  if (updates.imageStyle !== undefined) dbUpdates.image_style = updates.imageStyle;
+  if (updates.content !== undefined) dbUpdates.content = updates.content;
+  if (updates.images !== undefined) dbUpdates.images = updates.images as any;
+  if (updates.videoUrl !== undefined) dbUpdates.video_url = updates.videoUrl;
 
-export function getUserStories(userId: string): Story[] {
-  const db = getDatabase();
-  
-  const stmt = db.prepare(`
-    SELECT * FROM stories WHERE user_id = ? ORDER BY created_at DESC
-  `);
-  
-  const rows = stmt.all(userId);
-  return rows.map(rowToStory);
-}
-
-export function updateStory(id: string, updates: Partial<Story>): void {
-  const db = getDatabase();
-  
-  const fields: string[] = [];
-  const values: any[] = [];
-  
-  if (updates.childName !== undefined) {
-    fields.push('child_name = ?');
-    values.push(updates.childName);
-  }
-  if (updates.situation !== undefined) {
-    fields.push('situation = ?');
-    values.push(updates.situation);
-  }
-  if (updates.complexity !== undefined) {
-    fields.push('complexity = ?');
-    values.push(updates.complexity);
-  }
-  if (updates.tone !== undefined) {
-    fields.push('tone = ?');
-    values.push(updates.tone);
-  }
-  if (updates.imageStyle !== undefined) {
-    fields.push('image_style = ?');
-    values.push(updates.imageStyle);
-  }
-  if (updates.content !== undefined) {
-    fields.push('content = ?');
-    values.push(updates.content);
-  }
-  if (updates.images !== undefined) {
-    fields.push('images = ?');
-    values.push(JSON.stringify(updates.images));
-  }
-  if (updates.videoUrl !== undefined) {
-    fields.push('video_url = ?');
-    values.push(updates.videoUrl);
-  }
-  
-  if (fields.length === 0) {
+  if (Object.keys(dbUpdates).length === 0) {
     return;
   }
-  
-  fields.push('updated_at = ?');
-  values.push(new Date().toISOString());
-  values.push(id);
-  
-  const stmt = db.prepare(`
-    UPDATE stories SET ${fields.join(', ')} WHERE id = ?
-  `);
-  
-  stmt.run(...values);
+
+  const { error } = await supabaseAdmin
+    .from('stories')
+    .update(dbUpdates)
+    .eq('id', id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
-export function deleteStory(id: string): void {
-  const db = getDatabase();
-  
-  const stmt = db.prepare('DELETE FROM stories WHERE id = ?');
-  stmt.run(id);
+export async function deleteStory(id: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('stories')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
-export function getAllStories(): Story[] {
-  const db = getDatabase();
-  
-  const stmt = db.prepare('SELECT * FROM stories ORDER BY created_at DESC');
-  const rows = stmt.all();
-  
-  return rows.map(rowToStory);
+export async function getAllStories(): Promise<Story[]> {
+  const { data, error } = await supabaseAdmin
+    .from('stories')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    childName: row.child_name,
+    situation: row.situation,
+    complexity: row.complexity,
+    tone: row.tone,
+    imageStyle: row.image_style,
+    content: row.content,
+    images: row.images as string[],
+    videoUrl: row.video_url || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
 }
